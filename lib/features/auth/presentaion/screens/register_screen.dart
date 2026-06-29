@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/helpers/error_helper.dart';
 import '../../../../presentaion/shared/app_text_field.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -13,8 +15,29 @@ class RegisterScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    final auth = ref.watch(authStateProvider);
     final validation = ref.watch(authValidationProvider);
+    final action = ref.watch(authActionProvider);
+
+    Future<void> register() async {
+      ref.read(authValidationProvider.notifier).validateAll();
+      if (!ref.read(authValidationProvider).isValid) return;
+
+      final auth = ref.read(authStateProvider);
+      final result = await ref.read(authActionProvider.notifier).register(
+        auth.phone,
+        auth.password,
+        name: auth.name,
+      );
+      if (!context.mounted) return;
+      result.when(
+        success: (_) {},
+        failure: (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(translateError(e))),
+          );
+        },
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('حساب جديد')),
@@ -31,11 +54,22 @@ class RegisterScreen extends ConsumerWidget {
                 color: scheme.onSurface,
               )),
               const SizedBox(height: 8),
-              Text('أدخل رقم جوالك لإنشاء حساب', style: TextStyle(
+              Text('أدخل بياناتك لإنشاء حساب', style: TextStyle(
                 fontSize: 14,
                 color: scheme.onSurfaceVariant,
               )),
               const SizedBox(height: 32),
+              AppTextField(
+                label: 'الاسم',
+                hint: 'الاسم الكامل',
+                error: validation.field(AuthFields.name).error,
+                onChanged: (v) {
+                  ref.read(authStateProvider.notifier).updateName(v);
+                  ref.read(authValidationProvider.notifier).validateName();
+                },
+                prefix: Icon(Icons.person, color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 20),
               AppTextField(
                 label: 'رقم الجوال',
                 hint: '05xxxxxxxx',
@@ -45,6 +79,7 @@ class RegisterScreen extends ConsumerWidget {
                   ref.read(authValidationProvider.notifier).validatePhone();
                 },
                 keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 prefix: Icon(Icons.phone, color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 20),
@@ -61,12 +96,10 @@ class RegisterScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 32),
               FilledButton(
-                onPressed: () {
-                  ref.read(authValidationProvider.notifier).validateAll();
-                  if (!ref.read(authValidationProvider).isValid) return;
-                  context.go('/verify-otp', extra: auth.phone);
-                },
-                child: const Text('التالي', style: TextStyle(fontSize: 16)),
+                onPressed: action.isLoading('register') ? null : register,
+                child: action.isLoading('register')
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('تسجيل', style: TextStyle(fontSize: 16)),
               ),
               const SizedBox(height: 16),
               TextButton(

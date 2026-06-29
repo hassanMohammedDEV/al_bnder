@@ -1,12 +1,16 @@
+import 'package:app_platform_state/state.dart';
 import 'package:app_platform_ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
+import '../../../../presentaion/shared/time_picker_dialog.dart';
 import '../../providers/admin_provider.dart';
+import '../../repositories/admin_repository_impl.dart';
+import '../../../../core/helpers/error_helper.dart';
 
 class PendingBookingsScreen extends ConsumerStatefulWidget {
-  const PendingBookingsScreen({super.key});
+  final bool inShell;
+  const PendingBookingsScreen({super.key, this.inShell = false});
 
   @override
   ConsumerState<PendingBookingsScreen> createState() => _PendingBookingsScreenState();
@@ -43,7 +47,7 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
       },
       failure: (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
+          SnackBar(content: Text(translateError(e))),
         );
       },
     );
@@ -70,7 +74,7 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: 'المبلغ',
-                suffixText: 'ر.س',
+                suffixText: 'ر.ي',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -101,12 +105,12 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
     result.when(
       success: (_) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم شحن $amount ر.س بنجاح')),
+          SnackBar(content: Text('تم شحن $amount ر.ي بنجاح')),
         );
       },
       failure: (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
+          SnackBar(content: Text(translateError(e))),
         );
       },
     );
@@ -119,9 +123,7 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
     final action = ref.watch(adminActionProvider);
     final bookings = state.data ?? [];
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('الحجوزات المعلقة')),
-      body: AsyncView<List<Map<String, dynamic>>>(
+    Widget bodyContent = AsyncView<List<Map<String, dynamic>>>(
         status: state.status,
         data: state.data,
         error: state.error,
@@ -142,7 +144,7 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
             children: [
               Icon(Icons.error_outline, size: 48, color: scheme.error),
               const SizedBox(height: 16),
-              Text(e.message, style: TextStyle(color: scheme.error)),
+              Text(translateError(e), style: TextStyle(color: scheme.error)),
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () => ref.read(pendingBookingsProvider.notifier).load(),
@@ -160,14 +162,18 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
             itemBuilder: (_, i) => _buildBookingCard(bookings[i], scheme, action),
           ),
         ),
-      ),
-    );
+      );
+
+    if (widget.inShell) return bodyContent;
+    return Scaffold(appBar: AppBar(title: const Text('الحجوزات المعلقة')), body: bodyContent);
   }
 
-  Widget _buildBookingCard(Map<String, dynamic> booking, ColorScheme scheme, ActionState action) {
-    final dateFmt = DateFormat('yyyy/MM/dd HH:mm');
+  Widget _buildBookingCard(Map<String, dynamic> booking, ColorScheme scheme, ActionStore action) {
     final id = booking['id'] as String;
     final isProcessing = action.isLoading('confirm') || action.isLoading('deposit');
+
+    final status = booking['status'] as String? ?? 'pending';
+    final isPendingApproval = status == 'pending_approval';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -186,29 +192,47 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.15),
+                    color: (isPendingApproval ? Colors.blue : Colors.orange).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text('معلق', style: TextStyle(
-                    fontSize: 12, fontWeight: FontWeight.w600, color: Colors.orange,
-                  )),
+                  child: Text(
+                    isPendingApproval ? 'شبه مؤكد' : 'معلق',
+                    style: TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600,
+                      color: isPendingApproval ? Colors.blue : Colors.orange,
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             _infoRow(scheme, Icons.person, 'المستخدم', booking['user_name'] as String? ?? ''),
             _infoRow(scheme, Icons.phone, 'الجوال', booking['user_phone'] as String? ?? ''),
-            _infoRow(scheme, Icons.payments, 'المبلغ', '${(booking['total_price'] as num?)?.toStringAsFixed(0) ?? '0'} ر.س'),
+            _infoRow(scheme, Icons.payments, 'المبلغ', '${(booking['total_price'] as num?)?.toStringAsFixed(0) ?? '0'} ر.ي'),
+            if (booking['paid_amount'] != null && (booking['paid_amount'] as num) > 0)
+              _infoRow(scheme, Icons.receipt, 'المدفوع',
+                (booking['paid_amount'] as num) >= (booking['total_price'] as num)
+                    ? 'مدفوع بالكامل'
+                    : 'عربون: ${(booking['paid_amount'] as num).toStringAsFixed(0)} ر.ي'),
             _infoRow(scheme, Icons.calendar_today, 'تاريخ الحجز',
-                dateFmt.format(DateTime.parse(booking['created_at'] as String))),
+                formatDateTime12(DateTime.parse(booking['created_at'] as String))),
+            if (booking['instances'] is List && (booking['instances'] as List).isNotEmpty)
+              _infoRow(scheme, Icons.event, 'موعد الحجز',
+                  dateLabelWithDay(DateTime.parse((booking['instances'] as List).first['start_at'] as String).toLocal())),
             if (booking['instances'] is List && (booking['instances'] as List).isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'الأوقات: ${(booking['instances'] as List).map((inst) {
-                    final start = DateFormat('HH:mm').format(DateTime.parse(inst['start_at']));
-                    final end = DateFormat('HH:mm').format(DateTime.parse(inst['end_at']));
-                    return '$start - $end';
+                    final startDt = DateTime.parse(inst['start_at']).toLocal();
+                    final endDt = DateTime.parse(inst['end_at']).toLocal();
+                    final sh = startDt.hour;
+                    final eh = endDt.hour;
+                    final sh12 = sh == 0 ? 12 : (sh <= 12 ? sh : sh - 12);
+                    final eh12 = eh == 0 ? 12 : (eh <= 12 ? eh : eh - 12);
+                    final sp = sh < 12 ? 'ص' : 'م';
+                    final ep = eh < 12 ? 'ص' : 'م';
+                    return '$sh12:00 $sp - $eh12:00 $ep';
                   }).join(', ')}',
                   style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                 ),
@@ -225,15 +249,26 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
                         : const Text('تأكيد', style: TextStyle(color: Colors.white)),
                   ),
                 ),
+                if (booking['user_id'] != null) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: isProcessing ? null : () => _deposit(
+                        userId: booking['user_id'] as String,
+                        groupId: booking['group_id'] as String,
+                        userName: booking['user_name'] as String? ?? '',
+                      ),
+                      child: const Text('شحن المحفظة'),
+                    ),
+                  ),
+                ],
                 const SizedBox(width: 12),
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: isProcessing ? null : () => _deposit(
-                      userId: booking['user_id'] as String,
-                      groupId: booking['group_id'] as String,
-                      userName: booking['user_name'] as String? ?? '',
-                    ),
-                    child: const Text('شحن المحفظة'),
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.cancel_outlined, size: 18),
+                    label: const Text('إلغاء'),
+                    style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
+                    onPressed: isProcessing ? null : () => _cancelBooking(context, id),
                   ),
                 ),
               ],
@@ -241,6 +276,32 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _cancelBooking(BuildContext context, String bookingId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد الإلغاء'),
+        content: const Text('هل أنت متأكد من إلغاء هذا الحجز؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('إلغاء الحجز')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    final result = await ref.read(adminRepositoryProvider).adminCancelBooking(bookingId);
+    if (!mounted) return;
+    result.when(
+      success: (data) {
+        ref.read(pendingBookingsProvider.notifier).load();
+        final msg = data['message'] as String? ?? 'تم إلغاء الحجز';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      },
+      failure: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e)))),
     );
   }
 

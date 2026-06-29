@@ -2,6 +2,7 @@ import 'package:app_platform_core/core.dart';
 import 'package:app_platform_network/network.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants.dart';
 import '../../../core/providers/api_client_provider.dart';
 import '../../../core/providers/token_provider.dart';
 import '../models/auth_state.dart';
@@ -46,37 +47,64 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Result<Map<String, dynamic>>> getProfile() {
+    return _apiClient.post('rpc/get_my_profile', body: {}, parser: (json) {
+      return (json as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+    });
+  }
+
+  @override
   Future<Result<AuthState>> login(String phone, String password) async {
-    return _authApiClient.post('auth/v1/token?grant_type=password', body: {
-      'phone': phone,
+    final email = '$phone@al-bndr.app';
+    return _authApiClient.post('auth/v1/token?grant_type=password',
+        body: {
+      'email': email,
       'password': password,
-    }, parser: (json) {
+    },
+        headers: {
+      'Authorization': 'Bearer $supabaseAnonKey',
+    },
+        parser: (json) {
       final map = json as Map<String, dynamic>;
       final accessToken = map['access_token'] as String?;
       if (accessToken != null) {
-        _ref.read(tokenManagerProvider.notifier).setToken(accessToken);
+        _ref.read(tokenManagerProvider).setToken(accessToken);
       }
       return AuthState(
-        isLoggedIn: true,
+        phone: phone,
         userId: map['user']?['id'],
+        isLoggedIn: true,
       );
     });
   }
 
   @override
-  Future<Result<AuthState>> register(String phone, String password) async {
-    return _authApiClient.post('auth/v1/signup', body: {
-      'phone': phone,
+  Future<Result<AuthState>> register(String phone, String password,
+      {String? name}) async {
+    final email = '$phone@al-bndr.app';
+    return _authApiClient.post('auth/v1/signup',
+        body: {
+      'email': email,
       'password': password,
-    }, parser: (json) {
+      'data': {
+        'name': name ?? '',
+        'phone': phone,
+      },
+    },
+        headers: {
+      'Authorization': 'Bearer $supabaseAnonKey',
+    },
+        parser: (json) {
       final map = json as Map<String, dynamic>;
       final accessToken = map['access_token'] as String?;
       if (accessToken != null) {
-        _ref.read(tokenManagerProvider.notifier).setToken(accessToken);
+        _ref.read(tokenManagerProvider).setToken(accessToken);
       }
       return AuthState(
-        isLoggedIn: true,
+        name: name ?? '',
+        phone: phone,
         userId: map['user']?['id'],
+        isLoggedIn: true,
       );
     });
   }

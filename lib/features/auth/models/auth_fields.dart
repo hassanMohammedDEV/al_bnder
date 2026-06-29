@@ -1,1 +1,1 @@
-enum AuthFields { phone, password, code }
+enum AuthFields { name, phone, password, code }

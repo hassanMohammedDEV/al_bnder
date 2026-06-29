@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 class BookingFormState {
   final String facilityId;
+  final String facilityName;
+  final double pricePerHour;
   final DateTime selectedDate;
   final TimeOfDay startTime;
   final TimeOfDay endTime;
@@ -11,6 +13,8 @@ class BookingFormState {
 
   const BookingFormState({
     required this.facilityId,
+    required this.facilityName,
+    required this.pricePerHour,
     required this.selectedDate,
     required this.startTime,
     required this.endTime,
@@ -25,8 +29,12 @@ class BookingFormState {
     return end - start;
   }
 
+  double get totalPrice => hours * pricePerHour;
+
   BookingFormState copyWith({
     String? facilityId,
+    String? facilityName,
+    double? pricePerHour,
     DateTime? selectedDate,
     TimeOfDay? startTime,
     TimeOfDay? endTime,
@@ -36,6 +44,8 @@ class BookingFormState {
   }) {
     return BookingFormState(
       facilityId: facilityId ?? this.facilityId,
+      facilityName: facilityName ?? this.facilityName,
+      pricePerHour: pricePerHour ?? this.pricePerHour,
       selectedDate: selectedDate ?? this.selectedDate,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,

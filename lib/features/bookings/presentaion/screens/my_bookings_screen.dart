@@ -2,58 +2,173 @@ import 'package:app_platform_ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
+import '../../../../core/helpers/error_helper.dart';
+import '../../../../presentaion/shared/time_picker_dialog.dart';
 import '../../models/booking.dart';
 import '../../providers/booking_provider.dart';
+import '../../../facilities/providers/selected_group_provider.dart';
+import '../../../facilities/providers/facility_provider.dart';
 
-class MyBookingsScreen extends ConsumerWidget {
-  const MyBookingsScreen({super.key});
+class MyBookingsScreen extends ConsumerStatefulWidget {
+  final bool inShell;
+  const MyBookingsScreen({super.key, this.inShell = false});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyBookingsScreen> createState() => _MyBookingsScreenState();
+}
+
+class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
+  String? _statusFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    final selected = ref.read(selectedGroupProvider);
+    if (selected != null) {
+      ref.read(myBookingsProvider.notifier).setGroupId(selected);
+    }
+  }
+
+  void _setStatus(String? status) {
+    setState(() => _statusFilter = status);
+    ref.read(myBookingsProvider.notifier).load(status: status);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final selectedGroup = ref.watch(selectedGroupProvider);
+    final groupsState = ref.watch(facilityGroupsProvider);
+    final allGroups = groupsState.data ?? [];
+    final activeGroups = allGroups.where((g) => g.isActive).toList();
     final bookingsState = ref.watch(myBookingsProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('حجوزاتي')),
-      body: AsyncView<List<Booking>>(
-        status: bookingsState.status,
-        data: bookingsState.data,
-        error: bookingsState.error,
-        onLoading: () => const Center(child: CircularProgressIndicator()),
-        onEmpty: () => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.event_busy, size: 64, color: scheme.onSurfaceVariant),
-              const SizedBox(height: 16),
-              Text('لا توجد حجوزات', style: TextStyle(color: scheme.onSurfaceVariant)),
-            ],
-          ),
-        ),
-        onError: (e) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.cloud_off, size: 48, color: scheme.error),
-              const SizedBox(height: 16),
-              Text(e.message, style: TextStyle(color: scheme.error)),
-              ElevatedButton.icon(
-                onPressed: () => ref.read(myBookingsProvider.notifier).load(),
-                icon: const Icon(Icons.refresh),
-                label: const Text('إعادة المحاولة'),
+    // Sync group changes
+    if (selectedGroup != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(myBookingsProvider.notifier).setGroupId(selectedGroup);
+      });
+    }
+
+    Widget content = Column(
+      children: [
+        // Group selector (active only)
+        if (activeGroups.length > 1)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+            child: SizedBox(
+              height: 36,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: activeGroups.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) => FilterChip(
+                  label: Text(activeGroups[i].name, style: const TextStyle(fontSize: 13)),
+                  selected: activeGroups[i].id == selectedGroup,
+                  onSelected: (_) => ref.read(selectedGroupProvider.notifier).select(activeGroups[i].id),
+                ),
               ),
-            ],
+            ),
+          ),
+        // Status filter
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+          child: SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                FilterChip(
+                  label: const Text('الكل', style: TextStyle(fontSize: 13)),
+                  selected: _statusFilter == null,
+                  onSelected: (_) => _setStatus(null),
+                ),
+                const SizedBox(width: 6),
+                FilterChip(
+                  label: const Text('مؤكد', style: TextStyle(fontSize: 13)),
+                  selected: _statusFilter == 'confirmed',
+                  onSelected: (_) => _setStatus('confirmed'),
+                ),
+                const SizedBox(width: 6),
+                FilterChip(
+                  label: const Text('معلق', style: TextStyle(fontSize: 13)),
+                  selected: _statusFilter == 'pending',
+                  onSelected: (_) => _setStatus('pending'),
+                ),
+                const SizedBox(width: 6),
+                FilterChip(
+                  label: const Text('شبه مؤكد', style: TextStyle(fontSize: 13)),
+                  selected: _statusFilter == 'pending_approval',
+                  onSelected: (_) => _setStatus('pending_approval'),
+                ),
+                const SizedBox(width: 6),
+                FilterChip(
+                  label: const Text('ملغي', style: TextStyle(fontSize: 13)),
+                  selected: _statusFilter == 'cancelled',
+                  onSelected: (_) => _setStatus('cancelled'),
+                ),
+              ],
+            ),
           ),
         ),
-        onSuccess: (bookings) => ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: bookings.length,
-          itemBuilder: (_, i) => _BookingCard(booking: bookings[i]),
+        const SizedBox(height: 12),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async => ref.read(myBookingsProvider.notifier).load(status: _statusFilter),
+            child: AsyncView<List<Booking>>(
+              status: bookingsState.status,
+              data: bookingsState.data,
+              error: bookingsState.error,
+              onLoading: () => const Center(child: CircularProgressIndicator()),
+              onEmpty: () => ListView(
+                children: [
+                  const SizedBox(height: 100),
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.event_busy, size: 64, color: scheme.onSurfaceVariant),
+                        const SizedBox(height: 16),
+                        Text('لا توجد حجوزات', style: TextStyle(color: scheme.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              onError: (e) => ListView(
+                children: [
+                  const SizedBox(height: 100),
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cloud_off, size: 48, color: scheme.error),
+                        const SizedBox(height: 16),
+                        Text(translateError(e), style: TextStyle(color: scheme.error)),
+                        ElevatedButton.icon(
+                          onPressed: () => ref.read(myBookingsProvider.notifier).load(),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('إعادة المحاولة'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              onSuccess: (bookings) => ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: bookings.length,
+                itemBuilder: (_, i) => _BookingCard(booking: bookings[i]),
+              ),
+            ),
+          ),
         ),
-      ),
+      ],
     );
+
+    if (widget.inShell) return content;
+    return Scaffold(appBar: AppBar(title: const Text('حجوزاتي')), body: content);
   }
 }
 
@@ -65,6 +180,7 @@ class _BookingCard extends StatelessWidget {
     switch (status) {
       case 'confirmed': return Colors.green;
       case 'pending': return Colors.orange;
+      case 'pending_approval': return Colors.blue;
       case 'cancelled': return scheme.error;
       case 'completed': return scheme.primary;
       default: return scheme.onSurfaceVariant;
@@ -75,25 +191,51 @@ class _BookingCard extends StatelessWidget {
     switch (status) {
       case 'confirmed': return 'مؤكد';
       case 'pending': return 'معلق';
+      case 'pending_approval': return 'شبه مؤكد';
       case 'cancelled': return 'ملغي';
       case 'completed': return 'منتهي';
       default: return status;
     }
   }
 
+  String _formatCreatedAt(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final h = dt.hour;
+      final m = dt.minute;
+      final hour12 = h == 0 ? 12 : (h <= 12 ? h : h - 12);
+      final period = h < 12 ? 'ص' : 'م';
+      final minute = m.toString().padLeft(2, '0');
+      return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')} $hour12:$minute $period';
+    } catch (_) {
+      return iso;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final dateFmt = DateFormat('yyyy/MM/dd');
     final instance = booking.instances?.isNotEmpty == true ? booking.instances!.first : null;
-    final date = instance != null
-        ? dateFmt.format(DateTime.parse(instance.startAt))
-        : '--';
+    final bookingDate = instance != null
+        ? DateTime.parse(instance.startAt).toLocal()
+        : null;
+    final bookingEnd = instance != null
+        ? DateTime.parse(instance.endAt).toLocal()
+        : null;
+
+    String fmt12(DateTime dt) {
+      final h = dt.hour;
+      final m = dt.minute;
+      final hour12 = h == 0 ? 12 : (h <= 12 ? h : h - 12);
+      final period = h < 12 ? 'ص' : 'م';
+      final minute = m.toString().padLeft(2, '0');
+      return '$hour12:$minute $period';
+    }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
-        onTap: () => context.go('/booking/${booking.id}'),
+        onTap: () => context.push('/booking/${booking.id}'),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -129,14 +271,115 @@ class _BookingCard extends StatelessWidget {
                 children: [
                   Icon(Icons.calendar_today, size: 14, color: scheme.onSurfaceVariant),
                   const SizedBox(width: 6),
-                  Text(date, style: TextStyle(color: scheme.onSurfaceVariant)),
+                  Text(
+                    bookingDate != null ? dateLabelWithDay(bookingDate) : '--',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
                   const SizedBox(width: 16),
                   Icon(Icons.payments, size: 14, color: scheme.onSurfaceVariant),
                   const SizedBox(width: 6),
-                  Text('${booking.totalPrice.toStringAsFixed(0)} ر.س',
+                  Text('${booking.totalPrice.toStringAsFixed(0)} ر.ي',
                     style: TextStyle(color: scheme.onSurfaceVariant)),
                 ],
               ),
+              if (bookingDate != null && bookingEnd != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.access_time, size: 13, color: scheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${fmt12(bookingDate)} إلى ${fmt12(bookingEnd)}',
+                        style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.schedule, size: 13, color: scheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      'تم الإنشاء: ${_formatCreatedAt(booking.createdAt)}',
+                      style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              if (booking.status == 'pending')
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, size: 16, color: Colors.orange.shade700),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'هذا الحجز معلق، يرجى التواصل مع الإدارة لتأكيد الحجز، وإلا لن يتم احتسابه',
+                            style: TextStyle(fontSize: 11, color: Colors.orange.shade800, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (booking.isAdminBooking)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.admin_panel_settings, size: 13, color: Colors.green),
+                      const SizedBox(width: 4),
+                      Text('تم الدفع للإدارة', style: TextStyle(
+                        fontSize: 12, color: Colors.green, fontWeight: FontWeight.w500,
+                      )),
+                    ],
+                  ),
+                )
+              else if (booking.paidAmount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.receipt, size: 13,
+                        color: booking.paidAmount >= booking.totalPrice ? Colors.green : scheme.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        booking.paidAmount >= booking.totalPrice
+                            ? 'مدفوع بالكامل'
+                            : 'عربون: ${booking.paidAmount.toStringAsFixed(0)} ر.ي',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: booking.paidAmount >= booking.totalPrice ? Colors.green : scheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.receipt, size: 13, color: scheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text('لم يتم الدفع', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),

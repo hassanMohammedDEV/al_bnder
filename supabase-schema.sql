@@ -32,7 +32,8 @@ CREATE TABLE facilities (
   images          TEXT[],
   price_per_hour  DECIMAL(10,2) NOT NULL CHECK (price_per_hour > 0),
   is_active       BOOLEAN DEFAULT true,
-  created_at      TIMESTAMPTZ DEFAULT now()
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  updated_at      TIMESTAMPTZ DEFAULT now()
 );
 
 -- 2.3 User Profiles (extends auth.users)
@@ -65,7 +66,7 @@ CREATE TABLE wallet_transactions (
   wallet_id       UUID NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
   amount          DECIMAL(10,2) NOT NULL,
   type            TEXT NOT NULL CHECK (type IN ('deposit', 'withdrawal', 'refund')),
-  reference_type  TEXT CHECK (reference_type IN ('booking', 'admin_deposit', 'refund')),
+  reference_type  TEXT CHECK (reference_type IN ('booking', 'admin_deposit', 'refund', 'admin_deduct')),
   reference_id    UUID,
   description     TEXT,
   created_at      TIMESTAMPTZ DEFAULT now()
@@ -74,7 +75,8 @@ CREATE TABLE wallet_transactions (
 -- 2.6 Bookings (master record)
 CREATE TABLE bookings (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id             UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  user_id             UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  guest_name          TEXT,
   facility_id         UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
   total_price         DECIMAL(10,2) NOT NULL CHECK (total_price >= 0),
   status              TEXT NOT NULL DEFAULT 'pending'
@@ -84,9 +86,12 @@ CREATE TABLE bookings (
   is_recurring        BOOLEAN DEFAULT false,
   recurring_rule      JSONB,
   recurring_group_id  UUID,
+  guest_phone         TEXT,
   notes               TEXT,
+  approval_deadline   TIMESTAMPTZ,
   created_at          TIMESTAMPTZ DEFAULT now(),
-  updated_at          TIMESTAMPTZ DEFAULT now()
+  updated_at          TIMESTAMPTZ DEFAULT now(),
+  paid_amount         DECIMAL(10,2) DEFAULT 0
 );
 
 -- 2.7 Booking Instances (individual time slots)
@@ -152,6 +157,34 @@ CREATE TABLE otp_codes (
   created_at  TIMESTAMPTZ DEFAULT now(),
 
   CHECK (expires_at > created_at)
+);
+
+-- 2.11 Developer Settlements
+CREATE TABLE developer_settlements (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  facility_group_id UUID NOT NULL REFERENCES facility_groups(id) ON DELETE CASCADE,
+  amount          DECIMAL(10,2) NOT NULL CHECK (amount > 0),
+  notes           TEXT,
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  created_by      UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
+);
+
+
+-- 2.12 Group Settings
+CREATE TABLE group_settings (
+  facility_group_id  UUID PRIMARY KEY REFERENCES facility_groups(id) ON DELETE CASCADE,
+  opening_time       TIME NOT NULL DEFAULT '16:00',
+  closing_time_sun   TIME NOT NULL DEFAULT '22:00',
+  closing_time_mon   TIME NOT NULL DEFAULT '22:00',
+  closing_time_tue   TIME NOT NULL DEFAULT '22:00',
+  closing_time_wed   TIME NOT NULL DEFAULT '22:00',
+  closing_time_thu   TIME NOT NULL DEFAULT '22:00',
+  closing_time_fri   TIME NOT NULL DEFAULT '22:00',
+  closing_time_sat   TIME NOT NULL DEFAULT '22:00',
+  deposit_amount     DECIMAL(10,2) NOT NULL DEFAULT 5000,
+  contract_expiry_hours INT NOT NULL DEFAULT 8,
+  updated_at         TIMESTAMPTZ DEFAULT now(),
+  updated_by         UUID REFERENCES profiles(id) ON DELETE SET NULL
 );
 
 
@@ -470,6 +503,52 @@ CREATE POLICY "offers_update_admin_group"
 CREATE POLICY "otp_codes_no_access"
   ON otp_codes FOR ALL
   USING (false);
+
+
+-- ----------------------------
+-- 4.11 GROUP SETTINGS
+-- ----------------------------
+ALTER TABLE group_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "group_settings_select_admin"
+  ON group_settings FOR SELECT
+  USING (
+    user_role() IN ('facility_admin', 'facility_viewer', 'super_admin')
+    AND (
+      user_role() = 'super_admin'
+      OR facility_group_id = auth.user_facility_group_id()
+    )
+  );
+
+CREATE POLICY "group_settings_insert_admin"
+  ON group_settings FOR INSERT
+  WITH CHECK (
+    user_role() IN ('facility_admin', 'super_admin')
+    AND (
+      user_role() = 'super_admin'
+      OR facility_group_id = auth.user_facility_group_id()
+    )
+  );
+
+CREATE POLICY "group_settings_update_admin"
+  ON group_settings FOR UPDATE
+  USING (
+    user_role() IN ('facility_admin', 'super_admin')
+    AND (
+      user_role() = 'super_admin'
+      OR facility_group_id = auth.user_facility_group_id()
+    )
+  );
+
+CREATE POLICY "group_settings_delete_admin"
+  ON group_settings FOR DELETE
+  USING (
+    user_role() IN ('facility_admin', 'super_admin')
+    AND (
+      user_role() = 'super_admin'
+      OR facility_group_id = auth.user_facility_group_id()
+    )
+  );
 
 
 -- ----------------------------

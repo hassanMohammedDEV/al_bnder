@@ -10,11 +10,13 @@ class Booking with BookingMappable {
   final String facilityName;
   final String groupName;
   final double totalPrice;
+  final double paidAmount;
   final String status;
   final String paymentStatus;
   final bool isRecurring;
   final Map<String, dynamic>? recurringRule;
   final String createdAt;
+  final bool isAdminBooking;
   final List<BookingInstance>? instances;
 
   const Booking({
@@ -24,11 +26,13 @@ class Booking with BookingMappable {
     required this.facilityName,
     required this.groupName,
     required this.totalPrice,
+    this.paidAmount = 0,
     required this.status,
     this.paymentStatus = 'unpaid',
     this.isRecurring = false,
     this.recurringRule,
     required this.createdAt,
+    this.isAdminBooking = false,
     this.instances,
   });
 

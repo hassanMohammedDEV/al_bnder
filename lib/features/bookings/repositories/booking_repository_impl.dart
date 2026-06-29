@@ -16,9 +16,10 @@ class BookingRepositoryImpl implements BookingRepository {
   BookingRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient;
 
   @override
-  Future<Result<List<Booking>>> getMyBookings({String? status}) {
+  Future<Result<List<Booking>>> getMyBookings({String? status, String? facilityGroupId}) {
     return _apiClient.post('rpc/get_my_bookings', body: {
       'p_status': status,
+      'p_facility_group_id': facilityGroupId,
     }, parser: (json) {
       final data = json as Map<String, dynamic>;
       final bookings = (data['data'] as Map<String, dynamic>)['bookings'] as List;
@@ -33,6 +34,7 @@ class BookingRepositoryImpl implements BookingRepository {
     required DateTime endAt,
     bool isRecurring = false,
     Map<String, dynamic>? recurringRule,
+    String paymentType = 'auto',
   }) {
     return _apiClient.post('rpc/create_booking', body: {
       'p_facility_id': facilityId,
@@ -40,13 +42,14 @@ class BookingRepositoryImpl implements BookingRepository {
       'p_end_at': endAt.toUtc().toIso8601String(),
       'p_is_recurring': isRecurring,
       'p_recurring_rule': recurringRule,
+      'p_payment_type': paymentType,
     }, parser: (json) => json as Map<String, dynamic>);
   }
 
   @override
-  Future<Result<void>> cancelBooking(String bookingId) {
+  Future<Result<Map<String, dynamic>>> cancelBooking(String bookingId) {
     return _apiClient.post('rpc/cancel_booking', body: {
       'p_booking_id': bookingId,
-    }, parser: (_) {});
+    }, parser: (json) => json as Map<String, dynamic>);
   }
 }

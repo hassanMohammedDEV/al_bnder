@@ -51,7 +51,7 @@ class _FacilityCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
-        onTap: () => context.go('/create-booking', extra: facility.id),
+        onTap: () => context.push('/create-booking', extra: facility),
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -75,7 +75,7 @@ class _FacilityCard extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     )),
                     const SizedBox(height: 4),
-                    Text('${facility.pricePerHour.toStringAsFixed(0)} ر.س/الساعة', style: TextStyle(
+                    Text('${facility.pricePerHour.toStringAsFixed(0)} ر.ي/الساعة', style: TextStyle(
                       fontSize: 14,
                       color: scheme.primary,
                       fontWeight: FontWeight.w500,

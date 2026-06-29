@@ -39,6 +39,12 @@ class FacilityGroupMapper extends ClassMapperBase<FacilityGroup> {
     key: r'logo_url',
     opt: true,
   );
+  static String? _$phone(FacilityGroup v) => v.phone;
+  static const Field<FacilityGroup, String> _f$phone = Field(
+    'phone',
+    _$phone,
+    opt: true,
+  );
   static bool _$isActive(FacilityGroup v) => v.isActive;
   static const Field<FacilityGroup, bool> _f$isActive = Field(
     'isActive',
@@ -54,6 +60,7 @@ class FacilityGroupMapper extends ClassMapperBase<FacilityGroup> {
     #name: _f$name,
     #description: _f$description,
     #logoUrl: _f$logoUrl,
+    #phone: _f$phone,
     #isActive: _f$isActive,
   };
 
@@ -63,6 +70,7 @@ class FacilityGroupMapper extends ClassMapperBase<FacilityGroup> {
       name: data.dec(_f$name),
       description: data.dec(_f$description),
       logoUrl: data.dec(_f$logoUrl),
+      phone: data.dec(_f$phone),
       isActive: data.dec(_f$isActive),
     );
   }
@@ -134,6 +142,7 @@ abstract class FacilityGroupCopyWith<$R, $In extends FacilityGroup, $Out>
     String? name,
     String? description,
     String? logoUrl,
+    String? phone,
     bool? isActive,
   });
   FacilityGroupCopyWith<$R2, $In, $Out2> $chain<$R2, $Out2>(Then<$Out2, $R2> t);
@@ -153,6 +162,7 @@ class _FacilityGroupCopyWithImpl<$R, $Out>
     String? name,
     Object? description = $none,
     Object? logoUrl = $none,
+    Object? phone = $none,
     bool? isActive,
   }) => $apply(
     FieldCopyWithData({
@@ -160,6 +170,7 @@ class _FacilityGroupCopyWithImpl<$R, $Out>
       if (name != null) #name: name,
       if (description != $none) #description: description,
       if (logoUrl != $none) #logoUrl: logoUrl,
+      if (phone != $none) #phone: phone,
       if (isActive != null) #isActive: isActive,
     }),
   );
@@ -169,6 +180,7 @@ class _FacilityGroupCopyWithImpl<$R, $Out>
     name: data.get(#name, or: $value.name),
     description: data.get(#description, or: $value.description),
     logoUrl: data.get(#logoUrl, or: $value.logoUrl),
+    phone: data.get(#phone, or: $value.phone),
     isActive: data.get(#isActive, or: $value.isActive),
   );
 

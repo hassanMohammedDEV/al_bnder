@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/helpers/error_helper.dart';
 import '../../../../presentaion/shared/app_text_field.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -15,6 +16,26 @@ class LoginScreen extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     final validation = ref.watch(authValidationProvider);
     final action = ref.watch(authActionProvider);
+
+    Future<void> login() async {
+      ref.read(authValidationProvider.notifier)
+          .validateStep([AuthFields.phone, AuthFields.password]);
+      if (!ref.read(authValidationProvider).isValid) return;
+
+      final result = await ref.read(authActionProvider.notifier).login(
+        ref.read(authStateProvider).phone,
+        ref.read(authStateProvider).password,
+      );
+      if (!context.mounted) return;
+      result.when(
+        success: (_) {},
+        failure: (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(translateError(e))),
+          );
+        },
+      );
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -61,11 +82,7 @@ class LoginScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 32),
               FilledButton(
-                onPressed: action.isLoading('login') ? null : () {
-                  ref.read(authValidationProvider.notifier).validateAll();
-                  if (!ref.read(authValidationProvider).isValid) return;
-                  context.go('/home');
-                },
+                onPressed: action.isLoading('login') ? null : login,
                 child: action.isLoading('login')
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Text('دخول', style: TextStyle(fontSize: 16)),

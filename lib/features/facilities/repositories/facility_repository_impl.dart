@@ -33,4 +33,13 @@ class FacilityRepositoryImpl implements FacilityRepository {
       return list.map((e) => Facility.fromMap(e)).toList();
     });
   }
+
+  @override
+  Future<Result<Map<String, dynamic>>> getAvailableSlots(String facilityId, DateTime date) {
+    final ds = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    return _apiClient.post('rpc/get_available_slots', body: {
+      'p_facility_id': facilityId,
+      'p_date': ds,
+    }, parser: (json) => (json as Map<String, dynamic>)['data'] as Map<String, dynamic>);
+  }
 }

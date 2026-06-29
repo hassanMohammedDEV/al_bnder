@@ -55,6 +55,14 @@ class BookingMapper extends ClassMapperBase<Booking> {
     _$totalPrice,
     key: r'total_price',
   );
+  static double _$paidAmount(Booking v) => v.paidAmount;
+  static const Field<Booking, double> _f$paidAmount = Field(
+    'paidAmount',
+    _$paidAmount,
+    key: r'paid_amount',
+    opt: true,
+    def: 0,
+  );
   static String _$status(Booking v) => v.status;
   static const Field<Booking, String> _f$status = Field('status', _$status);
   static String _$paymentStatus(Booking v) => v.paymentStatus;
@@ -86,6 +94,14 @@ class BookingMapper extends ClassMapperBase<Booking> {
     _$createdAt,
     key: r'created_at',
   );
+  static bool _$isAdminBooking(Booking v) => v.isAdminBooking;
+  static const Field<Booking, bool> _f$isAdminBooking = Field(
+    'isAdminBooking',
+    _$isAdminBooking,
+    key: r'is_admin_booking',
+    opt: true,
+    def: false,
+  );
   static List<BookingInstance>? _$instances(Booking v) => v.instances;
   static const Field<Booking, List<BookingInstance>> _f$instances = Field(
     'instances',
@@ -101,11 +117,13 @@ class BookingMapper extends ClassMapperBase<Booking> {
     #facilityName: _f$facilityName,
     #groupName: _f$groupName,
     #totalPrice: _f$totalPrice,
+    #paidAmount: _f$paidAmount,
     #status: _f$status,
     #paymentStatus: _f$paymentStatus,
     #isRecurring: _f$isRecurring,
     #recurringRule: _f$recurringRule,
     #createdAt: _f$createdAt,
+    #isAdminBooking: _f$isAdminBooking,
     #instances: _f$instances,
   };
 
@@ -117,11 +135,13 @@ class BookingMapper extends ClassMapperBase<Booking> {
       facilityName: data.dec(_f$facilityName),
       groupName: data.dec(_f$groupName),
       totalPrice: data.dec(_f$totalPrice),
+      paidAmount: data.dec(_f$paidAmount),
       status: data.dec(_f$status),
       paymentStatus: data.dec(_f$paymentStatus),
       isRecurring: data.dec(_f$isRecurring),
       recurringRule: data.dec(_f$recurringRule),
       createdAt: data.dec(_f$createdAt),
+      isAdminBooking: data.dec(_f$isAdminBooking),
       instances: data.dec(_f$instances),
     );
   }
@@ -198,11 +218,13 @@ abstract class BookingCopyWith<$R, $In extends Booking, $Out>
     String? facilityName,
     String? groupName,
     double? totalPrice,
+    double? paidAmount,
     String? status,
     String? paymentStatus,
     bool? isRecurring,
     Map<String, dynamic>? recurringRule,
     String? createdAt,
+    bool? isAdminBooking,
     List<BookingInstance>? instances,
   });
   BookingCopyWith<$R2, $In, $Out2> $chain<$R2, $Out2>(Then<$Out2, $R2> t);
@@ -246,11 +268,13 @@ class _BookingCopyWithImpl<$R, $Out>
     String? facilityName,
     String? groupName,
     double? totalPrice,
+    double? paidAmount,
     String? status,
     String? paymentStatus,
     bool? isRecurring,
     Object? recurringRule = $none,
     String? createdAt,
+    bool? isAdminBooking,
     Object? instances = $none,
   }) => $apply(
     FieldCopyWithData({
@@ -260,11 +284,13 @@ class _BookingCopyWithImpl<$R, $Out>
       if (facilityName != null) #facilityName: facilityName,
       if (groupName != null) #groupName: groupName,
       if (totalPrice != null) #totalPrice: totalPrice,
+      if (paidAmount != null) #paidAmount: paidAmount,
       if (status != null) #status: status,
       if (paymentStatus != null) #paymentStatus: paymentStatus,
       if (isRecurring != null) #isRecurring: isRecurring,
       if (recurringRule != $none) #recurringRule: recurringRule,
       if (createdAt != null) #createdAt: createdAt,
+      if (isAdminBooking != null) #isAdminBooking: isAdminBooking,
       if (instances != $none) #instances: instances,
     }),
   );
@@ -276,11 +302,13 @@ class _BookingCopyWithImpl<$R, $Out>
     facilityName: data.get(#facilityName, or: $value.facilityName),
     groupName: data.get(#groupName, or: $value.groupName),
     totalPrice: data.get(#totalPrice, or: $value.totalPrice),
+    paidAmount: data.get(#paidAmount, or: $value.paidAmount),
     status: data.get(#status, or: $value.status),
     paymentStatus: data.get(#paymentStatus, or: $value.paymentStatus),
     isRecurring: data.get(#isRecurring, or: $value.isRecurring),
     recurringRule: data.get(#recurringRule, or: $value.recurringRule),
     createdAt: data.get(#createdAt, or: $value.createdAt),
+    isAdminBooking: data.get(#isAdminBooking, or: $value.isAdminBooking),
     instances: data.get(#instances, or: $value.instances),
   );
 

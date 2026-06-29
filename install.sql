@@ -45,7 +45,9 @@ CREATE TABLE facilities (
   images          TEXT[],
   price_per_hour  DECIMAL(10,2) NOT NULL CHECK (price_per_hour > 0),
   is_active       BOOLEAN DEFAULT true,
-  created_at      TIMESTAMPTZ DEFAULT now()
+  created_at          TIMESTAMPTZ DEFAULT now(),
+  updated_at          TIMESTAMPTZ DEFAULT now(),
+  paid_amount         DECIMAL(10,2) DEFAULT 0
 );
 
 CREATE TABLE profiles (
@@ -75,7 +77,7 @@ CREATE TABLE wallet_transactions (
   wallet_id       UUID NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
   amount          DECIMAL(10,2) NOT NULL,
   type            TEXT NOT NULL CHECK (type IN ('deposit', 'withdrawal', 'refund')),
-  reference_type  TEXT CHECK (reference_type IN ('booking', 'admin_deposit', 'refund')),
+  reference_type  TEXT CHECK (reference_type IN ('booking', 'admin_deposit', 'refund', 'admin_deduct')),
   reference_id    UUID,
   description     TEXT,
   created_at      TIMESTAMPTZ DEFAULT now()
@@ -95,7 +97,8 @@ CREATE TABLE bookings (
   recurring_group_id  UUID,
   notes               TEXT,
   created_at          TIMESTAMPTZ DEFAULT now(),
-  updated_at          TIMESTAMPTZ DEFAULT now()
+  updated_at          TIMESTAMPTZ DEFAULT now(),
+  paid_amount         DECIMAL(10,2) DEFAULT 0
 );
 
 CREATE TABLE booking_instances (

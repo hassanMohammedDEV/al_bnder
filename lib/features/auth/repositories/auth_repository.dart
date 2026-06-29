@@ -6,5 +6,6 @@ abstract class AuthRepository {
   Future<Result<void>> generateOtp(String phone);
   Future<Result<void>> verifyOtp(String phone, String code);
   Future<Result<AuthState>> login(String phone, String password);
-  Future<Result<AuthState>> register(String phone, String password);
+  Future<Result<AuthState>> register(String phone, String password, {String? name});
+  Future<Result<Map<String, dynamic>>> getProfile();
 }

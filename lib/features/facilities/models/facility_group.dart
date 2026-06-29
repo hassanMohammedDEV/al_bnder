@@ -8,6 +8,7 @@ class FacilityGroup with FacilityGroupMappable {
   final String name;
   final String? description;
   final String? logoUrl;
+  final String? phone;
   final bool isActive;
 
   const FacilityGroup({
@@ -15,6 +16,7 @@ class FacilityGroup with FacilityGroupMappable {
     required this.name,
     this.description,
     this.logoUrl,
+    this.phone,
     this.isActive = true,
   });
 

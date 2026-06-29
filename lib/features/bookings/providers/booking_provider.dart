@@ -1,14 +1,13 @@
 import 'package:app_platform_core/core.dart';
-import 'package:app_platform_state/state.dart' hide ActionState;
+import 'package:app_platform_state/state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
-import '../../auth/providers/auth_provider.dart';
-
-export '../../auth/providers/auth_provider.dart' show ActionState;
 import '../models/booking.dart';
 import '../models/booking_state.dart';
 import '../repositories/booking_repository_impl.dart';
+import '../../wallet/providers/wallet_provider.dart';
 
 final myBookingsProvider = NotifierProvider<MyBookingsNotifier, BaseState<List<Booking>>>(
   MyBookingsNotifier.new,
@@ -18,20 +17,32 @@ final bookingFormProvider = NotifierProvider<BookingFormNotifier, BookingFormSta
   BookingFormNotifier.new,
 );
 
-final bookingActionProvider = NotifierProvider<BookingActionNotifier, ActionState>(
-  BookingActionNotifier.new,
+final bookingActionProvider = StateNotifierProvider<BookingActionNotifier, ActionStore>(
+  (ref) => BookingActionNotifier(ref: ref),
 );
 
 class MyBookingsNotifier extends BaseNotifier<List<Booking>> {
+  String? _currentGroupId;
+
   @override
   BaseState<List<Booking>> build() {
     Future.microtask(() => load());
     return const BaseState();
   }
 
-  Future<void> load({String? status}) async {
+  void setGroupId(String? groupId) {
+    if (groupId != _currentGroupId) {
+      _currentGroupId = groupId;
+      load();
+    }
+  }
+
+  Future<void> load({String? status, String? facilityGroupId}) async {
     setLoading();
-    final result = await ref.read(bookingRepositoryProvider).getMyBookings(status: status);
+    final result = await ref.read(bookingRepositoryProvider).getMyBookings(
+      status: status,
+      facilityGroupId: facilityGroupId ?? _currentGroupId,
+    );
     result.when(
       success: (data) => setSuccess(data),
       failure: (e) => setError(e),
@@ -43,12 +54,15 @@ class BookingFormNotifier extends Notifier<BookingFormState> {
   @override
   BookingFormState build() => BookingFormState(
     facilityId: '',
+    facilityName: '',
+    pricePerHour: 0,
     selectedDate: DateTime.now().add(const Duration(days: 1)),
     startTime: const TimeOfDay(hour: 16, minute: 0),
     endTime: const TimeOfDay(hour: 18, minute: 0),
   );
 
-  void init(String facilityId) => state = state.copyWith(facilityId: facilityId);
+  void init(String facilityId, String facilityName, double pricePerHour) =>
+    state = state.copyWith(facilityId: facilityId, facilityName: facilityName, pricePerHour: pricePerHour);
   void setDate(DateTime d) => state = state.copyWith(selectedDate: d);
   void setStartTime(TimeOfDay t) => state = state.copyWith(startTime: t);
   void setEndTime(TimeOfDay t) => state = state.copyWith(endTime: t);
@@ -65,12 +79,14 @@ class BookingFormNotifier extends Notifier<BookingFormState> {
   void setRecurringEnd(DateTime d) => state = state.copyWith(recurringEndDate: d);
 }
 
-class BookingActionNotifier extends Notifier<ActionState> {
-  @override
-  ActionState build() => const ActionState();
+class BookingActionNotifier extends StateNotifier<ActionStore> {
+  BookingActionNotifier({required this.ref}) : super(ActionStore());
 
-  Future<Result<Map<String, dynamic>>> createBooking(BookingFormState form) async {
-    state = state.start('create');
+  final Ref ref;
+
+  Future<Result<Map<String, dynamic>>> createBooking(BookingFormState form, {String paymentType = 'auto'}) async {
+    const key = 'create';
+    state = state.start(key);
     final start = DateTime(
       form.selectedDate.year,
       form.selectedDate.month,
@@ -101,32 +117,57 @@ class BookingActionNotifier extends Notifier<ActionState> {
       endAt: end,
       isRecurring: form.isRecurring,
       recurringRule: rule,
+      paymentType: paymentType,
     );
 
     result.when(
       success: (_) {
-        state = state.success('create');
+        state = state.success(key);
         ref.read(myBookingsProvider.notifier).load();
       },
-      failure: (e) => state = state.fail('create', e.message),
+      failure: (e) => state = state.fail(key, e),
     );
     return result;
   }
 
-  Future<Result<void>> cancelBooking(String bookingId) async {
-    state = state.start('cancel');
+  Future<Result<Map<String, dynamic>>> createBookingRaw({
+    required String facilityId,
+    required DateTime startAt,
+    required DateTime endAt,
+    String paymentType = 'auto',
+  }) async {
+    const key = 'create';
+    state = state.start(key);
+    final result = await ref.read(bookingRepositoryProvider).createBooking(
+      facilityId: facilityId,
+      startAt: startAt,
+      endAt: endAt,
+      paymentType: paymentType,
+    );
+    result.when(
+      success: (_) {
+        state = state.success(key);
+        ref.read(myBookingsProvider.notifier).load();
+      },
+      failure: (e) => state = state.fail(key, e),
+    );
+    return result;
+  }
+
+  Future<Result<Map<String, dynamic>>> cancelBooking(String bookingId) async {
+    const key = 'cancel';
+    state = state.start(key);
     final result = await ref.read(bookingRepositoryProvider).cancelBooking(bookingId);
     result.when(
       success: (_) {
-        state = state.success('cancel');
+        state = state.success(key);
         ref.read(myBookingsProvider.notifier).load();
+        ref.invalidate(walletInfoFamilyProvider);
       },
-      failure: (e) => state = state.fail('cancel', e.message),
+      failure: (e) => state = state.fail(key, e),
     );
     return result;
   }
 
-  void reset() {
-    state = const ActionState();
-  }
+  void reset() => state = ActionStore();
 }

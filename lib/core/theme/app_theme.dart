@@ -1,13 +1,38 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/token_provider.dart';
+
 class ThemeModeNotifier extends Notifier<ThemeMode> {
   @override
-  ThemeMode build() => ThemeMode.system;
+  ThemeMode build() {
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      final saved = prefs.getString('theme_mode');
+      if (saved != null) {
+        switch (saved) {
+          case 'dark': return ThemeMode.dark;
+          case 'light': return ThemeMode.light;
+        }
+      }
+    } catch (_) {}
+    return ThemeMode.system;
+  }
 
-  void setDark() => state = ThemeMode.dark;
-  void setLight() => state = ThemeMode.light;
-  void toggle() => state = state == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+  void setDark() { state = ThemeMode.dark; _save(); }
+  void setLight() { state = ThemeMode.light; _save(); }
+  void toggle() {
+    state = state == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    _save();
+  }
+
+  void _save() {
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      prefs.setString('theme_mode', state.name);
+    } catch (_) {}
+  }
 }
 
 final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
@@ -36,6 +61,13 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: scheme,
       fontFamily: 'Tajawal',
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       scaffoldBackgroundColor: scheme.surface,
       appBarTheme: AppBarTheme(
         centerTitle: true,

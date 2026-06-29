@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../models/booking.dart';
 import '../../providers/booking_provider.dart';
+import '../../../../core/helpers/error_helper.dart';
 
 class BookingDetailScreen extends ConsumerWidget {
   final String bookingId;
@@ -16,6 +19,16 @@ class BookingDetailScreen extends ConsumerWidget {
     final bookings = bookingsState.data ?? [];
     final booking = bookings.where((b) => b.id == bookingId).firstOrNull;
 
+    final canCancel = () {
+      if (booking == null) return false;
+      if (booking.isAdminBooking) return false;
+      if (booking.status != 'pending' && booking.status != 'confirmed' && booking.status != 'pending_approval') return false;
+      final instance = booking.instances?.isNotEmpty == true ? booking.instances!.first : null;
+      if (instance == null) return false;
+      final startAt = DateTime.parse(instance.startAt).toLocal();
+      return DateTime.now().isBefore(startAt);
+    }();
+
     if (booking == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('تفاصيل الحجز')),
@@ -24,7 +37,14 @@ class BookingDetailScreen extends ConsumerWidget {
     }
 
     final dateFmt = DateFormat('yyyy/MM/dd');
-    final timeFmt = DateFormat('HH:mm');
+
+    String fmt12(DateTime dt) {
+      final local = dt.toLocal();
+      final h = local.hour;
+      final hour12 = h == 0 ? 12 : (h <= 12 ? h : h - 12);
+      final period = h < 12 ? 'ص' : 'م';
+      return '$hour12:00 $period';
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('تفاصيل الحجز')),
@@ -73,7 +93,7 @@ class BookingDetailScreen extends ConsumerWidget {
                       children: [
                         Icon(Icons.access_time, size: 16, color: scheme.primary),
                         const SizedBox(width: 8),
-                        Text('${dateFmt.format(start)} - ${timeFmt.format(start)} إلى ${timeFmt.format(end)}'),
+                        Text('${dateFmt.format(start.toLocal())} - ${fmt12(start)} إلى ${fmt12(end)}'),
                         const Spacer(),
                         _StatusBadge(status: instance.status),
                       ],
@@ -88,15 +108,49 @@ class BookingDetailScreen extends ConsumerWidget {
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
                 children: [
-                  Icon(Icons.payments, color: scheme.primary),
-                  const SizedBox(width: 12),
-                  Text('الإجمالي', style: TextStyle(color: scheme.onSurfaceVariant)),
-                  const Spacer(),
-                  Text('${booking.totalPrice.toStringAsFixed(0)} ر.س', style: TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold, color: scheme.onSurface,
-                  )),
+                  Row(
+                    children: [
+                      Icon(Icons.payments, color: scheme.primary),
+                      const SizedBox(width: 12),
+                      Text('الإجمالي', style: TextStyle(color: scheme.onSurfaceVariant)),
+                      const Spacer(),
+                      Text('${booking.totalPrice.toStringAsFixed(0)} ر.ي', style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold, color: scheme.onSurface,
+                      )),
+                    ],
+                  ),
+                  if (booking.isAdminBooking) ...[
+                    const Divider(height: 20),
+                    Row(
+                      children: [
+                        Icon(Icons.admin_panel_settings, size: 16, color: Colors.green),
+                        const SizedBox(width: 8),
+                        Text('تم الدفع للإدارة', style: TextStyle(
+                          color: Colors.green, fontWeight: FontWeight.w500,
+                        )),
+                      ],
+                    ),
+                  ] else if (booking.paidAmount > 0) ...[
+                    const Divider(height: 20),
+                    Row(
+                      children: [
+                        Icon(Icons.receipt, size: 16,
+                          color: booking.paidAmount >= booking.totalPrice ? Colors.green : scheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          booking.paidAmount >= booking.totalPrice
+                              ? 'مدفوع بالكامل'
+                              : 'مدفوع (عربون): ${booking.paidAmount.toStringAsFixed(0)} ر.ي',
+                          style: TextStyle(
+                            color: booking.paidAmount >= booking.totalPrice ? Colors.green : scheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -109,34 +163,70 @@ class BookingDetailScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
-                    Icon(Icons.qr_code_2, size: 64, color: scheme.primary),
+                    QrImageView(
+                      data: booking.instances!.first.qrToken!,
+                      version: QrVersions.auto,
+                      size: 200,
+                      backgroundColor: Colors.white,
+                    ),
                     const SizedBox(height: 8),
                     Text('رمز التحقق', style: TextStyle(color: scheme.onSurfaceVariant)),
-                    const SizedBox(height: 4),
-                    Text(booking.instances!.first.qrToken!, style: TextStyle(
-                      fontSize: 12, color: scheme.onSurfaceVariant,
-                    )),
                   ],
                 ),
               ),
             ),
           const SizedBox(height: 24),
           // Cancel button
-          if (booking.status == 'pending' || booking.status == 'confirmed')
+          if (booking.isAdminBooking)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lock, size: 18, color: Colors.orange.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'هذا الحجز تم عبر الإدارة، للإلغاء يرجى التواصل معهم',
+                      style: TextStyle(color: Colors.orange.shade700, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (canCancel)
             OutlinedButton.icon(
               onPressed: () {
                 showDialog(
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: const Text('إلغاء الحجز'),
-                    content: const Text('هل أنت متأكد من إلغاء هذا الحجز؟'),
+                    content: Text(_cancelMessage(booking)),
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('رجوع')),
                       FilledButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.pop(ctx);
-                          ref.read(bookingActionProvider.notifier).cancelBooking(booking.id);
-                          context.go('/my-bookings');
+                          final result = await ref.read(bookingActionProvider.notifier).cancelBooking(booking.id);
+                          if (context.mounted) {
+                            result.when(
+                              success: (data) {
+                                final msg = data['message'] as String? ?? 'تم إلغاء الحجز';
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(msg)),
+                                );
+                                context.pop();
+                              },
+                              failure: (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(translateError(e))),
+                                );
+                              },
+                            );
+                          }
                         },
                         child: const Text('تأكيد الإلغاء'),
                       ),
@@ -166,6 +256,7 @@ class _StatusBadge extends StatelessWidget {
     switch (status) {
       case 'confirmed': color = Colors.green; label = 'مؤكد'; break;
       case 'pending': color = Colors.orange; label = 'معلق'; break;
+      case 'pending_approval': color = Colors.blue; label = 'شبه مؤكد'; break;
       case 'cancelled': color = scheme.error; label = 'ملغي'; break;
       case 'completed': color = scheme.primary; label = 'منتهي'; break;
       default: color = scheme.onSurfaceVariant; label = status; break;
@@ -180,4 +271,17 @@ class _StatusBadge extends StatelessWidget {
       child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
     );
   }
+}
+
+String _cancelMessage(Booking booking) {
+  if (booking.isAdminBooking) {
+    return 'هذا الحجز تم عبر الإدارة. للإلغاء يرجى التواصل مع الإدارة.';
+  }
+  if (booking.paidAmount >= booking.totalPrice) {
+    return 'تم دفع المبلغ كاملاً. سيتم خصم العربون كرسوم إلغاء وإرجاع الباقي.';
+  }
+  if (booking.paidAmount > 0) {
+    return 'تم دفع العربون فقط. سيتم خصم العربون كرسوم إلغاء.';
+  }
+  return 'لم يتم دفع أي مبلغ. الإلغاء بدون رسوم.';
 }

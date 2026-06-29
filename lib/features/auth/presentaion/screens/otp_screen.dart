@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../presentaion/shared/loading_dialog.dart';
 import '../../providers/auth_provider.dart';
+import '../../../../core/helpers/error_helper.dart';
 
+/// OTP bypassed — kept for reference only.
 class OtpScreen extends ConsumerStatefulWidget {
   final String phone;
   const OtpScreen({super.key, required this.phone});
@@ -15,26 +16,32 @@ class OtpScreen extends ConsumerStatefulWidget {
 
 class _OtpScreenState extends ConsumerState<OtpScreen> {
   final _codeController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _sendOtp());
-  }
+  bool _loading = false;
 
   Future<void> _sendOtp() async {
-    await ref.read(authActionProvider.notifier).generateOtp(widget.phone);
+    setState(() => _loading = true);
+    final result = await ref.read(authServiceProvider).generateOtp(widget.phone);
+    if (!mounted) return;
+    setState(() => _loading = false);
+    result.when(
+      success: (_) {},
+      failure: (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(translateError(e))),
+        );
+      },
+    );
   }
 
   Future<void> _verify() async {
     if (_codeController.text.length != 6) return;
-    showLoadingDialog(context, message: 'جاري التحقق...');
-    final result = await ref.read(authActionProvider.notifier).verifyOtp(
+    setState(() => _loading = true);
+    final result = await ref.read(authServiceProvider).verifyOtp(
       widget.phone,
       _codeController.text,
     );
     if (!mounted) return;
-    Navigator.of(context).pop();
+    setState(() => _loading = false);
 
     result.when(
       success: (_) {
@@ -43,7 +50,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       },
       failure: (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
+          SnackBar(content: Text(translateError(e))),
         );
       },
     );
@@ -58,7 +65,6 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final action = ref.watch(authActionProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('تأكيد رقم الجوال')),
@@ -106,11 +112,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                 },
               ),
               const SizedBox(height: 24),
-              if (action.isLoading('otp'))
+              if (_loading)
                 const CircularProgressIndicator()
               else
                 TextButton(
-                  onPressed: action.isLoading('verify') ? null : _sendOtp,
+                  onPressed: _loading ? null : _sendOtp,
                   child: const Text('إعادة إرسال الرمز'),
                 ),
             ],

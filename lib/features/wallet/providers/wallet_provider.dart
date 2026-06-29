@@ -8,6 +8,15 @@ final walletInfoProvider = NotifierProvider<WalletNotifier, BaseState<WalletInfo
   WalletNotifier.new,
 );
 
+final walletInfoFamilyProvider = FutureProvider.family<WalletInfo, String>((ref, groupId) async {
+  final repo = ref.read(walletRepositoryProvider);
+  final result = await repo.getWallet(groupId);
+  return result.when(
+    success: (data) => data,
+    failure: (e) => throw Exception(e.message),
+  );
+});
+
 class WalletNotifier extends BaseNotifier<WalletInfo> {
   @override
   BaseState<WalletInfo> build() => const BaseState();

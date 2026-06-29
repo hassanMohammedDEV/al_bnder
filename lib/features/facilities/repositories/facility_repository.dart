@@ -6,4 +6,5 @@ import '../models/facility.dart';
 abstract class FacilityRepository {
   Future<Result<List<FacilityGroup>>> getGroups();
   Future<Result<List<Facility>>> getFacilities(String groupId);
+  Future<Result<Map<String, dynamic>>> getAvailableSlots(String facilityId, DateTime date);
 }
