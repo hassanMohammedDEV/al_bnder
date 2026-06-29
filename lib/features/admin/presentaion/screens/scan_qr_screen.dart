@@ -14,10 +14,16 @@ class ScanQrScreen extends ConsumerStatefulWidget {
 }
 
 class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
-  final MobileScannerController _controller = MobileScannerController();
+  int _scannerKey = 0;
+  late final MobileScannerController _controller;
   bool _torch = false;
   bool _scanning = true;
-  bool _retrying = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = MobileScannerController();
+  }
 
   @override
   void dispose() {
@@ -73,11 +79,12 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
     );
   }
 
-  Future<void> _retry() async {
-    setState(() => _retrying = true);
-    await _controller.stop();
-    await _controller.start();
-    if (mounted) setState(() => _retrying = false);
+  void _retry() {
+    _controller.dispose();
+    setState(() {
+      _controller = MobileScannerController();
+      _scannerKey++;
+    });
   }
 
   @override
@@ -87,6 +94,7 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
       body: Stack(
         children: [
           MobileScanner(
+            key: ValueKey(_scannerKey),
             controller: _controller,
             onDetect: _onDetect,
             errorBuilder: (context, error) {
@@ -99,10 +107,8 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
                     const Text('تعذر الوصول إلى الكاميرا'),
                     const SizedBox(height: 16),
                     FilledButton(
-                      onPressed: _retrying ? null : _retry,
-                      child: _retrying
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('إعادة المحاولة'),
+                      onPressed: _retry,
+                      child: const Text('إعادة المحاولة'),
                     ),
                   ],
                 ),

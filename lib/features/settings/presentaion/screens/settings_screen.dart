@@ -181,9 +181,9 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: const Icon(Icons.chevron_left),
                 onTap: () async {
                   final url = Uri.parse('https://wa.me/967730845718');
-                  if (await canLaunchUrl(url)) {
+                  try {
                     await launchUrl(url, mode: LaunchMode.externalApplication);
-                  }
+                  } catch (_) {}
                 },
               ),
             ],

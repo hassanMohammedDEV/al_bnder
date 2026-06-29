@@ -108,8 +108,8 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
         buf.writeln('❌ لا توجد أوقات متاحة');
       } else {
         for (final s in freeSlots) {
-          final startStr = '${(s.start ~/ 60).toString().padLeft(2, '0')}:${(s.start % 60).toString().padLeft(2, '0')}';
-          final endStr = '${(s.end ~/ 60).toString().padLeft(2, '0')}:${(s.end % 60).toString().padLeft(2, '0')}';
+          final startStr = _to12h(s.start);
+          final endStr = _to12h(s.end);
           buf.writeln('🟢 $startStr - $endStr');
         }
       }
@@ -142,9 +142,24 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
               itemBuilder: (_, i) {
                 final g = groups[i];
                 return FilterChip(
-                  label: Text(g.name, style: const TextStyle(fontSize: 13)),
-                  selected: g.id == selectedId,
-                  onSelected: (_) => ref.read(selectedGroupProvider.notifier).select(g.id),
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!g.isActive) ...[
+                        const Icon(Icons.lock, size: 14),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(g.name, style: const TextStyle(fontSize: 13)),
+                    ],
+                  ),
+                  selected: g.id == selectedId && g.isActive,
+                  onSelected: g.isActive
+                      ? (_) => ref.read(selectedGroupProvider.notifier).select(g.id)
+                      : (_) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('ستتوفر قريباً')),
+                          );
+                        },
                 );
               },
             ),
@@ -227,10 +242,10 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
                   onPressed: () async {
                     final text = _buildShareText();
                     final encoded = Uri.encodeFull(text);
-                    final url = Uri.parse('https://wa.me/?text=$encoded');
-                    if (await canLaunchUrl(url)) {
+                    final url = Uri.parse('https://api.whatsapp.com/send?text=$encoded');
+                    try {
                       await launchUrl(url, mode: LaunchMode.externalApplication);
-                    }
+                    } catch (_) {}
                   },
                   icon: const Icon(Icons.chat, color: Colors.white),
                   label: const Text('واتساب'),
@@ -251,8 +266,21 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   }
 
   String _formatTimeOnly(String timeStr) {
-    if (timeStr.length >= 5) return timeStr.substring(0, 5);
-    return timeStr;
+    if (timeStr.length < 5) return timeStr;
+    final parts = timeStr.substring(0, 5).split(':');
+    final h = int.parse(parts[0]);
+    final m = parts[1];
+    final period = h >= 12 ? 'م' : 'ص';
+    final hour12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+    return '$hour12:$m $period';
+  }
+
+  String _to12h(int minutesSinceMidnight) {
+    final h = minutesSinceMidnight ~/ 60;
+    final m = (minutesSinceMidnight % 60).toString().padLeft(2, '0');
+    final period = h >= 12 ? 'م' : 'ص';
+    final hour12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+    return '$hour12:$m $period';
   }
 }
 
@@ -311,7 +339,7 @@ class _FacilitySlotsCard extends StatelessWidget {
   }
 
   String _formatSlotTime(String iso) {
-    return DateFormat('HH:mm').format(DateTime.parse(iso));
+    return DateFormat('h:mm a').format(DateTime.parse(iso));
   }
 
   String _statusLabel(String status) {

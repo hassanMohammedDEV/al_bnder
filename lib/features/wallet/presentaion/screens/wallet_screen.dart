@@ -131,9 +131,9 @@ class _WalletBody extends ConsumerWidget {
               child: OutlinedButton.icon(
                 onPressed: () async {
                   final url = Uri.parse(_whatsappUrl(phone));
-                  if (await canLaunchUrl(url)) {
+                  try {
                     await launchUrl(url, mode: LaunchMode.externalApplication);
-                  }
+                  } catch (_) {}
                 },
                 icon: Icon(Icons.chat, color: const Color(0xFF25D366)),
                 label: Text(
