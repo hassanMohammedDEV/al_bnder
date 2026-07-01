@@ -72,11 +72,10 @@ class LoginScreen extends ConsumerWidget {
                 prefix: Icon(Icons.phone, color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 20),
-              AppTextField(
+              PasswordField(
                 label: 'كلمة المرور',
                 hint: '••••••••',
                 error: validation.field(AuthFields.password).error,
-                obscure: true,
                 onChanged: (v) {
                   ref.read(authStateProvider.notifier).updatePassword(v);
                   ref.read(authValidationProvider.notifier).validatePassword();

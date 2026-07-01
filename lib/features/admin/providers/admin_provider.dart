@@ -10,6 +10,8 @@ import '../repositories/admin_repository_impl.dart';
 final dashboardProvider = FutureProvider<List<GroupStats>>((ref) async {
   // Auto-cancel expired pending_approval bookings
   await ref.read(adminRepositoryProvider).autoCancelExpiredBookings();
+  // Auto-delete expired player ads
+  await ref.read(adminRepositoryProvider).autoDeleteExpiredPlayerAds();
 
   final result = await ref.read(adminRepositoryProvider).getDashboard();
   return result.when(

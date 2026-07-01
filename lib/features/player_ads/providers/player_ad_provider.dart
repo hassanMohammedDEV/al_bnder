@@ -42,7 +42,7 @@ class PlayerAdsNotifier extends BaseNotifier<List<PlayerAd>> {
     );
   }
 
-  void reload() => load();
+  Future<void> reload() => load();
 }
 
 class ReportedPlayerAdsNotifier extends BaseNotifier<List<PlayerAd>> {

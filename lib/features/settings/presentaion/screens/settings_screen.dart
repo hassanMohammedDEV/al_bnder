@@ -64,8 +64,8 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
-        // Admin section
-        if (isAdmin) ...[
+        // Admin section (hide when inShell — already in bottom nav)
+        if (isAdmin && !inShell) ...[
           Card(
             child: ListTile(
               leading: Container(
@@ -84,32 +84,34 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
         ],
-        // Announcements
-        Card(
-          child: ListTile(
-            leading: Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(10),
+        // Announcements (hide when inShell — bell icon already in AppBar)
+        if (!inShell) ...[
+          Card(
+            child: ListTile(
+              leading: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.campaign, color: scheme.primary),
               ),
-              child: Icon(Icons.campaign, color: scheme.primary),
+              title: const Text('الإشعارات'),
+              trailing: Builder(builder: (_) {
+                final count = ref.watch(unreadCountProvider);
+                if (count > 0) {
+                  return Badge(
+                    label: Text('$count'),
+                    child: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
+                  );
+                }
+                return Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant);
+              }),
+              onTap: () => context.push('/announcements'),
             ),
-            title: const Text('الإشعارات'),
-            trailing: Builder(builder: (_) {
-              final count = ref.watch(unreadCountProvider);
-              if (count > 0) {
-                return Badge(
-                  label: Text('$count'),
-                  child: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
-                );
-              }
-              return Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant);
-            }),
-            onTap: () => context.push('/announcements'),
           ),
-        ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
         // Available slots
         Card(
           child: ListTile(

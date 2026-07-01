@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../auth/providers/auth_provider.dart';
+import '../../../facilities/providers/selected_group_provider.dart';
 import '../../models/group_stats.dart';
 import '../../providers/admin_provider.dart';
 import '../../../../core/helpers/error_helper.dart';
@@ -26,6 +27,9 @@ class AdminDashboardScreen extends ConsumerWidget {
         statsAsync.when(
           data: (groups) {
             if (groups.isEmpty) return const SizedBox.shrink();
+            if (groups.isNotEmpty && ref.read(selectedGroupProvider) == null) {
+              Future.microtask(() => ref.read(selectedGroupProvider.notifier).select(groups.first.groupId));
+            }
             final totals = groups.length == 1
                 ? groups.first
                 : groups.fold(groups.first, (a, b) => a.merge(b));
@@ -172,7 +176,18 @@ class AdminDashboardScreen extends ConsumerWidget {
     ),
     );
     if (inShell) return body;
-    return Scaffold(appBar: AppBar(title: const Text('لوحة الإدارة')), body: body);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('لوحة الإدارة'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => context.push('/admin/search-bookings'),
+          ),
+        ],
+      ),
+      body: body,
+    );
   }
 }
 

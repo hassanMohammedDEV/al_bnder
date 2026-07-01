@@ -376,6 +376,236 @@ BEGIN
 END;
 $$;
 
+-- -------------------------------------------------------
+-- 8. BAN USER FROM PLAYER ADS
+-- POST /rest/v1/rpc/ban_user_from_player_ads
+-- Body: { "p_user_id": "uuid", "p_reason": "text" }
+-- -------------------------------------------------------
+CREATE TABLE IF NOT EXISTS player_ad_bans (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  facility_group_id UUID NOT NULL REFERENCES facility_groups(id) ON DELETE CASCADE,
+  banned_by         UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  reason            TEXT DEFAULT '',
+  created_at        TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, facility_group_id)
+);
+
+CREATE OR REPLACE FUNCTION ban_user_from_player_ads(
+  p_user_id           UUID,
+  p_facility_group_id UUID,
+  p_reason            TEXT DEFAULT ''
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id UUID;
+  v_is_admin BOOLEAN;
+BEGIN
+  v_admin_id := auth.uid();
+  IF v_admin_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = v_admin_id AND role IN ('facility_admin', 'super_admin')
+  ) INTO v_is_admin;
+
+  IF NOT v_is_admin THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  INSERT INTO player_ad_bans (user_id, facility_group_id, banned_by, reason, created_at)
+  VALUES (p_user_id, p_facility_group_id, v_admin_id, p_reason, NOW())
+  ON CONFLICT (user_id, facility_group_id) DO NOTHING;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم الحظر', 'data', null);
+END;
+$$;
+
+-- -------------------------------------------------------
+-- 9. UNBAN USER
+-- POST /rest/v1/rpc/unban_user_from_player_ads
+-- Body: { "p_user_id": "uuid" }
+-- -------------------------------------------------------
+CREATE OR REPLACE FUNCTION unban_user_from_player_ads(
+  p_user_id           UUID,
+  p_facility_group_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id UUID;
+  v_is_admin BOOLEAN;
+BEGIN
+  v_admin_id := auth.uid();
+  IF v_admin_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = v_admin_id AND role IN ('facility_admin', 'super_admin')
+  ) INTO v_is_admin;
+
+  IF NOT v_is_admin THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  DELETE FROM player_ad_bans
+  WHERE user_id = p_user_id AND facility_group_id = p_facility_group_id;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم إلغاء الحظر', 'data', null);
+END;
+$$;
+
+-- -------------------------------------------------------
+-- 10. GET BANNED USERS (with optional phone search)
+-- POST /rest/v1/rpc/get_banned_users
+-- Body: { "p_facility_group_id": "uuid", "p_search": "text" }
+-- -------------------------------------------------------
+CREATE OR REPLACE FUNCTION get_banned_users(
+  p_facility_group_id UUID,
+  p_search            TEXT DEFAULT ''
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id UUID;
+  v_is_admin BOOLEAN;
+  v_users JSONB;
+BEGIN
+  v_admin_id := auth.uid();
+  IF v_admin_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = v_admin_id AND role IN ('facility_admin', 'super_admin')
+  ) INTO v_is_admin;
+
+  IF NOT v_is_admin THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  SELECT jsonb_agg(jsonb_build_object(
+    'user_id', b.user_id,
+    'full_name', COALESCE(p.full_name, ''),
+    'phone', p.phone,
+    'reason', b.reason,
+    'banned_by', b.banned_by,
+    'created_at', b.created_at
+  ) ORDER BY b.created_at DESC) INTO v_users
+  FROM player_ad_bans b
+  JOIN profiles p ON p.id = b.user_id
+  WHERE b.facility_group_id = p_facility_group_id
+    AND (p_search = '' OR p.phone ILIKE '%' || p_search || '%' OR p.full_name ILIKE '%' || p_search || '%');
+
+  IF v_users IS NULL THEN
+    v_users := '[]'::JSONB;
+  END IF;
+
+  RETURN jsonb_build_object('success', true, 'message', 'success', 'data', v_users);
+END;
+$$;
+
+-- -------------------------------------------------------
+-- 11. SEARCH USERS TO BAN
+-- POST /rest/v1/rpc/search_users_to_ban
+-- Body: { "p_facility_group_id": "uuid", "p_search": "text" }
+-- -------------------------------------------------------
+CREATE OR REPLACE FUNCTION search_users_to_ban(
+  p_facility_group_id UUID,
+  p_search            TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id UUID;
+  v_is_admin BOOLEAN;
+  v_users JSONB;
+BEGIN
+  v_admin_id := auth.uid();
+  IF v_admin_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = v_admin_id AND role IN ('facility_admin', 'super_admin')
+  ) INTO v_is_admin;
+
+  IF NOT v_is_admin THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  SELECT jsonb_agg(jsonb_build_object(
+    'user_id', p.id,
+    'full_name', COALESCE(p.full_name, ''),
+    'phone', p.phone,
+    'is_banned', CASE WHEN b.id IS NOT NULL THEN true ELSE false END
+  ) ORDER BY p.created_at DESC) INTO v_users
+  FROM profiles p
+  LEFT JOIN player_ad_bans b ON b.user_id = p.id AND b.facility_group_id = p_facility_group_id
+  WHERE p.phone ILIKE '%' || p_search || '%'
+     OR p.full_name ILIKE '%' || p_search || '%'
+  LIMIT 20;
+
+  IF v_users IS NULL THEN
+    v_users := '[]'::JSONB;
+  END IF;
+
+  RETURN jsonb_build_object('success', true, 'message', 'success', 'data', v_users);
+END;
+$$;
+
+-- -------------------------------------------------------
+-- 12. CHECK IF USER IS BANNED (used by create_player_ad)
+-- -------------------------------------------------------
+DROP FUNCTION IF EXISTS check_player_ad_banned;
+CREATE OR REPLACE FUNCTION check_player_ad_banned(
+  p_facility_group_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_banned BOOLEAN;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  SELECT EXISTS (
+    SELECT 1 FROM player_ad_bans
+    WHERE user_id = v_user_id AND facility_group_id = p_facility_group_id
+  ) INTO v_banned;
+
+  RETURN jsonb_build_object('success', true, 'message', 'success', 'data', v_banned);
+END;
+$$;
+
 GRANT EXECUTE ON FUNCTION get_player_ads TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION create_player_ad TO authenticated;
 GRANT EXECUTE ON FUNCTION delete_player_ad TO authenticated;
@@ -383,3 +613,57 @@ GRANT EXECUTE ON FUNCTION update_player_ad TO authenticated;
 GRANT EXECUTE ON FUNCTION report_player_ad TO authenticated;
 GRANT EXECUTE ON FUNCTION get_reported_player_ads TO authenticated;
 GRANT EXECUTE ON FUNCTION dismiss_player_ad_report TO authenticated;
+GRANT EXECUTE ON FUNCTION ban_user_from_player_ads TO authenticated;
+GRANT EXECUTE ON FUNCTION unban_user_from_player_ads TO authenticated;
+GRANT EXECUTE ON FUNCTION get_banned_users TO authenticated;
+GRANT EXECUTE ON FUNCTION search_users_to_ban TO authenticated;
+GRANT EXECUTE ON FUNCTION check_player_ad_banned TO authenticated;
+
+-- -------------------------------------------------------
+-- 13. AUTO DELETE EXPIRED PLAYER ADS
+-- POST /rest/v1/rpc/auto_delete_expired_player_ads
+-- Body: {}
+-- -------------------------------------------------------
+CREATE OR REPLACE FUNCTION auto_delete_expired_player_ads()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_count INT;
+BEGIN
+  DELETE FROM player_ads
+  WHERE status = 'active'
+    AND date IS NOT NULL
+    AND date::DATE < CURRENT_DATE;
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم حذف ' || v_count || ' إعلان منتهي',
+    'data', jsonb_build_object('deleted_count', v_count)
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION auto_delete_expired_player_ads TO authenticated;
+
+-- -------------------------------------------------------
+-- Schedule auto-delete via pg_cron (runs daily at midnight)
+-- Idempotent: unschedules first, then schedules
+-- -------------------------------------------------------
+DO $cron$
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS pg_cron;
+  PERFORM cron.unschedule('auto-delete-expired-player-ads');
+  PERFORM cron.schedule(
+    'auto-delete-expired-player-ads',
+    '0 0 * * *',
+    $cron_task$SELECT auto_delete_expired_player_ads()$cron_task$
+  );
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'pg_cron not available, auto-delete scheduling skipped. Run manually: SELECT auto_delete_expired_player_ads();';
+END;
+$cron$;

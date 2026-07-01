@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/helpers/error_helper.dart';
 import '../../../../presentaion/shared/time_picker_dialog.dart';
@@ -152,6 +153,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ],
         ),
         const SizedBox(height: 20),
+
+        // Quick actions
+        Row(
+          children: [
+            Expanded(
+              child: _QuickActionCard(
+                icon: Icons.people_outline,
+                label: 'إعلانات اللاعبين',
+                color: Colors.green,
+                onTap: () => context.push('/player-ads'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
 
         // Group selector
         if (groups.length > 1) ...[
@@ -970,6 +986,50 @@ class _WalletOpTile extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            children: [
+              Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(height: 8),
+              Text(label, style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w600, color: scheme.onSurface,
+              )),
+            ],
+          ),
         ),
       ),
     );

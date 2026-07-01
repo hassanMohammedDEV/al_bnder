@@ -105,14 +105,21 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: RefreshIndicator(
+            child: RefreshIndicator(
             onRefresh: () async => ref.read(myBookingsProvider.notifier).load(status: _statusFilter),
             child: AsyncView<List<Booking>>(
               status: bookingsState.status,
               data: bookingsState.data,
               error: bookingsState.error,
-              onLoading: () => const Center(child: CircularProgressIndicator()),
+              onLoading: () => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(height: MediaQuery.of(context).size.height * 0.6),
+                  const Center(child: CircularProgressIndicator()),
+                ],
+              ),
               onEmpty: () => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 children: [
                   const SizedBox(height: 100),
                   Center(
@@ -128,6 +135,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
                 ],
               ),
               onError: (e) => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 children: [
                   const SizedBox(height: 100),
                   Center(
@@ -148,6 +156,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
                 ],
               ),
               onSuccess: (bookings) => ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 itemCount: bookings.length,
                 itemBuilder: (_, i) => _BookingCard(booking: bookings[i]),

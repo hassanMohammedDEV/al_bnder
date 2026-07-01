@@ -2,6 +2,7 @@ import 'package:app_platform_state/state.dart';
 import 'package:app_platform_ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../presentaion/shared/time_picker_dialog.dart';
@@ -195,49 +196,82 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
     final action = ref.watch(adminActionProvider);
     final bookings = state.data ?? [];
 
-    Widget bodyContent = AsyncView<List<Map<String, dynamic>>>(
+    Widget bodyContent = RefreshIndicator(
+      onRefresh: () => ref.read(pendingBookingsProvider.notifier).load(),
+      child: AsyncView<List<Map<String, dynamic>>>(
         status: state.status,
         data: state.data,
         error: state.error,
-        onLoading: () => const Center(child: CircularProgressIndicator()),
-        onEmpty: () => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+        onLoading: () => LayoutBuilder(
+          builder: (_, constraints) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             children: [
-              Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
-              const SizedBox(height: 16),
-              Text('لا توجد حجوزات معلقة', style: TextStyle(color: scheme.onSurfaceVariant)),
+              SizedBox(height: constraints.maxHeight, child: const Center(child: CircularProgressIndicator())),
             ],
           ),
         ),
-        onError: (e) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+        onEmpty: () => LayoutBuilder(
+          builder: (_, constraints) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             children: [
-              Icon(Icons.error_outline, size: 48, color: scheme.error),
-              const SizedBox(height: 16),
-              Text(translateError(e), style: TextStyle(color: scheme.error)),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () => ref.read(pendingBookingsProvider.notifier).load(),
-                icon: const Icon(Icons.refresh),
-                label: const Text('إعادة المحاولة'),
-              ),
+              SizedBox(child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
+                    const SizedBox(height: 16),
+                    Text('لا توجد حجوزات معلقة', style: TextStyle(color: scheme.onSurfaceVariant)),
+                  ],
+                ),
+              ), height: constraints.maxHeight),
             ],
           ),
         ),
-        onSuccess: (_) => RefreshIndicator(
-          onRefresh: () => ref.read(pendingBookingsProvider.notifier).load(),
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: bookings.length,
-            itemBuilder: (_, i) => _buildBookingCard(bookings[i], scheme, action),
+        onError: (e) => LayoutBuilder(
+          builder: (_, constraints) => ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              SizedBox(height: constraints.maxHeight, child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.error_outline, size: 48, color: scheme.error),
+                    const SizedBox(height: 16),
+                    Text(translateError(e), style: TextStyle(color: scheme.error)),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () => ref.read(pendingBookingsProvider.notifier).load(),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('إعادة المحاولة'),
+                    ),
+                  ],
+                ),
+              )),
+            ],
           ),
         ),
-      );
+        onSuccess: (_) => ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          itemCount: bookings.length,
+          itemBuilder: (_, i) => _buildBookingCard(bookings[i], scheme, action),
+        ),
+      ),
+    );
 
     if (widget.inShell) return bodyContent;
-    return Scaffold(appBar: AppBar(title: const Text('الحجوزات المعلقة')), body: bodyContent);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('الحجوزات المعلقة'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () => context.push('/admin/search-bookings'),
+          ),
+        ],
+      ),
+      body: bodyContent,
+    );
   }
 
   Widget _buildBookingCard(Map<String, dynamic> booking, ColorScheme scheme, ActionStore action) {

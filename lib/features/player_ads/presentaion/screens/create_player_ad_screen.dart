@@ -1,7 +1,9 @@
+import 'package:app_platform_core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../repositories/player_ad_repository_impl.dart';
 import '../../providers/player_ad_provider.dart';
 import '../../../facilities/providers/facility_provider.dart';
 import '../../../facilities/providers/selected_group_provider.dart';
@@ -115,6 +117,16 @@ class _CreatePlayerAdScreenState extends ConsumerState<CreatePlayerAdScreen> {
     }
 
     setState(() => _isSubmitting = true);
+
+    final banResult = await ref.read(playerAdRepositoryProvider).checkBanned(groupId);
+    if (!mounted) return;
+    if (banResult is Success && (banResult as Success).data == true) {
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم حظرك من نشر الإعلانات')),
+      );
+      return;
+    }
 
     final data = <String, dynamic>{
       'p_facility_group_id': groupId,

@@ -9,4 +9,9 @@ abstract class PlayerAdRepository {
   Future<Result<void>> reportPlayerAd(String adId, String reason);
   Future<Result<List<PlayerAd>>> getReportedAds(String facilityGroupId);
   Future<Result<void>> dismissReport(String adId);
+  Future<Result<bool>> checkBanned(String facilityGroupId);
+  Future<Result<void>> banUser(String userId, String facilityGroupId, String reason);
+  Future<Result<void>> unbanUser(String userId, String facilityGroupId);
+  Future<Result<List<Map<String, dynamic>>>> getBannedUsers(String facilityGroupId, String search);
+  Future<Result<List<Map<String, dynamic>>>> searchUsersToBan(String facilityGroupId, String search);
 }

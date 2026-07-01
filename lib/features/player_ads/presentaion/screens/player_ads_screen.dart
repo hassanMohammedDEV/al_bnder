@@ -43,19 +43,28 @@ class _PlayerAdsScreenState extends ConsumerState<PlayerAdsScreen> {
       content = const Center(child: CircularProgressIndicator());
     } else if (state.status == LoadStatus.error) {
       final errMsg = state.error?.userMessage ?? 'فشل تحميل الإعلانات';
-      content = Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: scheme.error),
-            const SizedBox(height: 8),
-            Text(errMsg, style: TextStyle(color: scheme.error)),
-            const SizedBox(height: 12),
-            FilledButton.tonal(
-              onPressed: () => ref.read(playerAdsProvider.notifier).reload(),
-              child: const Text('إعادة المحاولة'),
+      content = RefreshIndicator(
+        onRefresh: () => ref.read(playerAdsProvider.notifier).reload(),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline, size: 48, color: scheme.error),
+                  const SizedBox(height: 8),
+                  Text(errMsg, style: TextStyle(color: scheme.error)),
+                  const SizedBox(height: 12),
+                  FilledButton.tonal(
+                    onPressed: () => ref.read(playerAdsProvider.notifier).reload(),
+                    child: const Text('إعادة المحاولة'),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       );
     } else {
@@ -67,24 +76,37 @@ class _PlayerAdsScreenState extends ConsumerState<PlayerAdsScreen> {
               : ads.where((a) => a.type == _typeFilter).toList();
 
       if (filtered.isEmpty) {
-        content = Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.people_outline, size: 64, color: scheme.onSurfaceVariant.withValues(alpha: 0.4)),
-              const SizedBox(height: 12),
-              Text('لا توجد إعلانات', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 16)),
-              const SizedBox(height: 4),
-              Text('أضف أول إعلان', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
-            ],
+        content = RefreshIndicator(
+          onRefresh: () => ref.read(playerAdsProvider.notifier).reload(),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.people_outline, size: 64, color: scheme.onSurfaceVariant.withValues(alpha: 0.4)),
+                    const SizedBox(height: 12),
+                    Text('لا توجد إعلانات', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text('أضف أول إعلان', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
           ),
         );
       } else {
         final bottomInset = MediaQuery.of(context).padding.bottom;
-        content = ListView.builder(
-          padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 80),
-          itemCount: filtered.length,
-          itemBuilder: (_, i) => _PlayerAdCard(ad: filtered[i]),
+        content = RefreshIndicator(
+          onRefresh: () => ref.read(playerAdsProvider.notifier).reload(),
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset + 80),
+            itemCount: filtered.length,
+            itemBuilder: (_, i) => _PlayerAdCard(ad: filtered[i]),
+          ),
         );
       }
     }

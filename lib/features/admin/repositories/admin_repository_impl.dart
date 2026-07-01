@@ -240,6 +240,11 @@ class AdminRepositoryImpl implements AdminRepository {
   }
 
   @override
+  Future<Result<void>> autoDeleteExpiredPlayerAds() {
+    return _apiClient.post('rpc/auto_delete_expired_player_ads', body: {}, parser: (_) {});
+  }
+
+  @override
   Future<Result<Map<String, dynamic>>> adminCancelBooking(String bookingId) {
     return _apiClient.post('rpc/cancel_booking', body: {
       'p_booking_id': bookingId,

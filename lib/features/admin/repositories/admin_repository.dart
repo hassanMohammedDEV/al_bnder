@@ -59,6 +59,7 @@ abstract class AdminRepository {
     required int contractExpiryHours,
   });
   Future<Result<void>> autoCancelExpiredBookings();
+  Future<Result<void>> autoDeleteExpiredPlayerAds();
   Future<Result<Map<String, dynamic>>> adminCancelBooking(String bookingId);
   Future<Result<Map<String, dynamic>>> shrinkBooking({
     required String bookingId,

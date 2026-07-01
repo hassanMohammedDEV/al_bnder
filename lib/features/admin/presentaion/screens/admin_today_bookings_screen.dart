@@ -18,12 +18,14 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<Map<String, dynamic>> _all = [];
-  bool _loading = true;
+  List<Map<String, dynamic>> _filtered = [];
+  bool _showSearch = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() => setState(() {}));
     _load();
   }
 
@@ -34,17 +36,31 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
     final result = await ref.read(adminRepositoryProvider).getTodayBookings(widget.facilityGroupId);
     if (!mounted) return;
     result.when(
-      success: (data) => setState(() { _all = data; _loading = false; }),
-      failure: (e) => setState(() => _loading = false),
+      success: (data) => setState(() { _all = data; _filtered = data; }),
+      failure: (e) => setState(() {}),
     );
   }
 
+  void _onSearch(String q) {
+    setState(() {
+      if (q.isEmpty) {
+        _filtered = List.from(_all);
+      } else {
+        _filtered = _all.where((b) {
+          final phone = (b['user_phone'] as String? ?? '').toLowerCase();
+          final name = (b['user_name'] as String? ?? '').toLowerCase();
+          final ql = q.toLowerCase();
+          return phone.contains(ql) || name.contains(ql);
+        }).toList();
+      }
+    });
+  }
+
   List<Map<String, dynamic>> _byStatus(String status) =>
-      _all.where((b) => b['status'] == status).toList();
+      _filtered.where((b) => b['status'] == status).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +69,38 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
     return Scaffold(
       appBar: AppBar(
         title: const Text('حجوزات اليوم'),
-        bottom: TabBar(
+        actions: [
+          IconButton(
+            icon: Icon(_showSearch ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                _showSearch = !_showSearch;
+                if (!_showSearch) _onSearch('');
+              });
+            },
+          ),
+        ],
+        bottom: _showSearch
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(48),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: TextField(
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'بحث برقم الجوال...',
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
+                    onChanged: _onSearch,
+                  ),
+                ),
+              )
+            : TabBar(
           controller: _tabController,
           tabs: [
             Tab(text: 'مؤكدة (${_byStatus('confirmed').length})'),
@@ -62,25 +109,27 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
           ],
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _list(scheme, _byStatus('confirmed'), Colors.green),
-                  _list(scheme, _byStatus('pending'), Colors.orange),
-                  _list(scheme, _byStatus('pending_approval'), Colors.blue),
-                ],
-              ),
-            ),
+      body: IndexedStack(
+        index: _tabController.index,
+        children: [
+          RefreshIndicator(onRefresh: _load, child: _list(scheme, _byStatus('confirmed'), Colors.green)),
+          RefreshIndicator(onRefresh: _load, child: _list(scheme, _byStatus('pending'), Colors.orange)),
+          RefreshIndicator(onRefresh: _load, child: _list(scheme, _byStatus('pending_approval'), Colors.blue)),
+        ],
+      ),
     );
   }
 
   Widget _list(ColorScheme scheme, List<Map<String, dynamic>> items, Color color) {
     if (items.isEmpty) {
-      return Center(child: Text('لا توجد حجوزات', style: TextStyle(color: scheme.onSurfaceVariant)));
+      return ListView(
+        children: [
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Center(child: Text('لا توجد حجوزات', style: TextStyle(color: scheme.onSurfaceVariant))),
+          ),
+        ],
+      );
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
@@ -93,7 +142,6 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
         final bookingDate = instances.isNotEmpty
             ? DateTime.parse(instances.first['start_at'] as String).toLocal()
             : null;
-        final canCancel = status != 'cancelled' && (bookingDate == null || DateTime.now().isBefore(bookingDate));
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: Padding(
@@ -159,37 +207,38 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
                       style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                     ),
                   ),
-                if (canCancel) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.cancel_outlined, size: 18),
-                          label: Text('إلغاء', maxLines: 1, overflow: TextOverflow.ellipsis),
-                          style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
-                          onPressed: () => _cancelBooking(context, id),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.compress, size: 18),
-                          label: Text('تقليص', maxLines: 1, overflow: TextOverflow.ellipsis),
-                          onPressed: () => _shrinkBooking(context, b, instances),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.swap_horiz, size: 18),
-                          label: Text('نقل', maxLines: 1, overflow: TextOverflow.ellipsis),
-                          onPressed: () => _rescheduleBooking(context, b, instances),
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 8),
+                if (status == 'pending' || status == 'pending_approval')
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text('تأكيد الحجز'),
+                      onPressed: () => _confirmBooking(context, id),
+                    ),
+                  )
+                else if (status == 'confirmed')
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (v) {
+                        switch (v) {
+                          case 'cancel':
+                            _cancelBooking(context, id);
+                          case 'shrink':
+                            _shrinkBooking(context, b, instances);
+                          case 'reschedule':
+                            _rescheduleBooking(context, b, instances);
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(value: 'cancel', child: ListTile(leading: Icon(Icons.cancel_outlined, color: Colors.red), title: Text('إلغاء'), dense: true)),
+                        const PopupMenuItem(value: 'shrink', child: ListTile(leading: Icon(Icons.compress), title: Text('تقليص'), dense: true)),
+                        const PopupMenuItem(value: 'reschedule', child: ListTile(leading: Icon(Icons.swap_horiz), title: Text('نقل'), dense: true)),
+                      ],
+                    ),
                   ),
-                ],
               ],
             ),
           ),
@@ -393,6 +442,41 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
         _load();
         final msg = data['message'] as String? ?? 'تم نقل الحجز بنجاح';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      },
+      failure: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e)))),
+    );
+  }
+
+  Future<void> _confirmBooking(BuildContext context, String bookingId) async {
+    final amountCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد الحجز'),
+        content: TextField(
+          controller: amountCtrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'المبلغ المدفوع (اختياري)',
+            hintText: '0',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    final paid = double.tryParse(amountCtrl.text) ?? 0;
+    final result = await ref.read(adminRepositoryProvider).confirmBooking(bookingId, paidAmount: paid);
+    if (!mounted) return;
+    result.when(
+      success: (_) {
+        _load();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تأكيد الحجز')));
       },
       failure: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e)))),
     );

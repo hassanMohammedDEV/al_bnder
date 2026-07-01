@@ -1,9 +1,11 @@
 import 'package:app_platform_core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../models/player_ad.dart';
 import '../../providers/player_ad_provider.dart';
+import '../../repositories/player_ad_repository_impl.dart';
 import '../../../facilities/providers/selected_group_provider.dart';
 
 class ReportedAdsScreen extends ConsumerStatefulWidget {
@@ -16,21 +18,15 @@ class ReportedAdsScreen extends ConsumerStatefulWidget {
 
 class _ReportedAdsScreenState extends ConsumerState<ReportedAdsScreen> {
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final groupId = ref.read(selectedGroupProvider);
-      if (groupId != null) {
-        ref.read(reportedPlayerAdsProvider.notifier).load(groupId);
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final groupId = ref.watch(selectedGroupProvider);
     final scheme = Theme.of(context).colorScheme;
     final state = ref.watch(reportedPlayerAdsProvider);
     final action = ref.watch(playerAdActionProvider);
+
+    if (groupId != null && state.status == LoadStatus.idle) {
+      Future.microtask(() => ref.read(reportedPlayerAdsProvider.notifier).load(groupId));
+    }
 
     Widget content;
 
@@ -44,23 +40,35 @@ class _ReportedAdsScreenState extends ConsumerState<ReportedAdsScreen> {
             Icon(Icons.error_outline, size: 48, color: scheme.error),
             const SizedBox(height: 8),
             Text('فشل التحميل', style: TextStyle(color: scheme.error)),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              onPressed: () { if (groupId != null) ref.read(reportedPlayerAdsProvider.notifier).load(groupId); },
+              child: const Text('إعادة المحاولة'),
+            ),
           ],
         ),
       );
     } else if (state.data == null || state.data!.isEmpty) {
-      content = Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.flag_outlined, size: 64, color: scheme.onSurfaceVariant.withValues(alpha: 0.4)),
-            const SizedBox(height: 12),
-            Text('لا توجد بلاغات', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 16)),
-          ],
+      content = SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.flag_outlined, size: 64, color: scheme.onSurfaceVariant.withValues(alpha: 0.4)),
+                const SizedBox(height: 12),
+                Text('لا توجد بلاغات', style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 16)),
+              ],
+            ),
+          ),
         ),
       );
     } else {
       final bottomInset = MediaQuery.of(context).padding.bottom;
-      content = ListView.builder(
+      final listView = ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
         itemCount: state.data!.length,
         itemBuilder: (_, i) => _ReportedAdCard(
@@ -68,17 +76,80 @@ class _ReportedAdsScreenState extends ConsumerState<ReportedAdsScreen> {
           isProcessing: action.isLoading('dismiss'),
           onDismiss: () => ref.read(playerAdActionProvider.notifier).dismissReport(state.data![i].id),
           onDelete: () => _confirmDelete(context, state.data![i].id),
+          onBan: () => _banUser(state.data![i]),
         ),
+      );
+      content = RefreshIndicator(
+        onRefresh: () async {
+          if (groupId != null) await ref.read(reportedPlayerAdsProvider.notifier).load(groupId);
+        },
+        child: listView,
       );
     }
 
-    if (widget.inShell) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('البلاغات')),
-        body: content,
+    if (state.status != LoadStatus.loading && (state.data == null || state.data!.isEmpty)) {
+      content = RefreshIndicator(
+        onRefresh: () async {
+          if (groupId != null) await ref.read(reportedPlayerAdsProvider.notifier).load(groupId);
+        },
+        child: content,
       );
     }
-    return Scaffold(appBar: AppBar(title: const Text('البلاغات')), body: content);
+
+    final appBar = AppBar(
+      title: const Text('البلاغات'),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.block),
+          tooltip: 'إدارة المحظورين',
+          onPressed: () => context.push('/admin/banned-users'),
+        ),
+      ],
+    );
+
+    if (widget.inShell) {
+      return Scaffold(appBar: appBar, body: content);
+    }
+    return Scaffold(appBar: appBar, body: content);
+  }
+
+  Future<void> _banUser(PlayerAd ad) async {
+    final groupId = ref.read(selectedGroupProvider);
+    if (groupId == null) return;
+    final reasonCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('حظر ${ad.creatorName}'),
+        content: TextField(
+          controller: reasonCtrl,
+          decoration: const InputDecoration(
+            labelText: 'سبب الحظر (اختياري)',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 2,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('حظر'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final result = await ref.read(playerAdRepositoryProvider).banUser(ad.creatorId, groupId, reasonCtrl.text.trim());
+    if (!mounted) return;
+    result.when(
+      success: (_) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حظر المستخدم')));
+      },
+      failure: (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      },
+    );
   }
 
   void _confirmDelete(BuildContext context, String adId) {
@@ -108,12 +179,14 @@ class _ReportedAdCard extends StatelessWidget {
   final bool isProcessing;
   final VoidCallback onDismiss;
   final VoidCallback onDelete;
+  final VoidCallback onBan;
 
   const _ReportedAdCard({
     required this.ad,
     required this.isProcessing,
     required this.onDismiss,
     required this.onDelete,
+    required this.onBan,
   });
 
   @override
@@ -150,12 +223,21 @@ class _ReportedAdCard extends StatelessWidget {
                     child: const Text('تجاهل'),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Expanded(
                   child: FilledButton(
                     onPressed: isProcessing ? null : onDelete,
                     style: FilledButton.styleFrom(backgroundColor: scheme.error),
-                    child: const Text('حذف الإعلان'),
+                    child: const Text('حذف'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: isProcessing ? null : onBan,
+                    icon: const Icon(Icons.block, size: 16),
+                    label: const Text('حظر', style: TextStyle(fontSize: 12)),
+                    style: FilledButton.styleFrom(backgroundColor: Colors.red.shade900),
                   ),
                 ),
               ],

@@ -71,4 +71,55 @@ class PlayerAdRepositoryImpl implements PlayerAdRepository {
       'p_ad_id': adId,
     }, parser: (_) {});
   }
+
+  @override
+  Future<Result<bool>> checkBanned(String facilityGroupId) {
+    return _apiClient.post('rpc/check_player_ad_banned', body: {
+      'p_facility_group_id': facilityGroupId,
+    }, parser: (json) {
+      final data = json as Map<String, dynamic>;
+      return data['data'] as bool;
+    });
+  }
+
+  @override
+  Future<Result<void>> banUser(String userId, String facilityGroupId, String reason) {
+    return _apiClient.post('rpc/ban_user_from_player_ads', body: {
+      'p_user_id': userId,
+      'p_facility_group_id': facilityGroupId,
+      'p_reason': reason,
+    }, parser: (_) {});
+  }
+
+  @override
+  Future<Result<void>> unbanUser(String userId, String facilityGroupId) {
+    return _apiClient.post('rpc/unban_user_from_player_ads', body: {
+      'p_user_id': userId,
+      'p_facility_group_id': facilityGroupId,
+    }, parser: (_) {});
+  }
+
+  @override
+  Future<Result<List<Map<String, dynamic>>>> getBannedUsers(String facilityGroupId, String search) {
+    return _apiClient.post('rpc/get_banned_users', body: {
+      'p_facility_group_id': facilityGroupId,
+      'p_search': search,
+    }, parser: (json) {
+      final data = json as Map<String, dynamic>;
+      final list = data['data'] as List;
+      return list.cast<Map<String, dynamic>>();
+    });
+  }
+
+  @override
+  Future<Result<List<Map<String, dynamic>>>> searchUsersToBan(String facilityGroupId, String search) {
+    return _apiClient.post('rpc/search_users_to_ban', body: {
+      'p_facility_group_id': facilityGroupId,
+      'p_search': search,
+    }, parser: (json) {
+      final data = json as Map<String, dynamic>;
+      final list = data['data'] as List;
+      return list.cast<Map<String, dynamic>>();
+    });
+  }
 }

@@ -1,6 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+class PasswordField extends StatefulWidget {
+  final String label;
+  final String? hint;
+  final String? error;
+  final ValueChanged<String>? onChanged;
+  final Widget? prefix;
+
+  const PasswordField({
+    super.key,
+    required this.label,
+    this.hint,
+    this.error,
+    this.onChanged,
+    this.prefix,
+  });
+
+  @override
+  State<PasswordField> createState() => _PasswordFieldState();
+}
+
+class _PasswordFieldState extends State<PasswordField> {
+  bool _obscure = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppTextField(
+      label: widget.label,
+      hint: widget.hint,
+      error: widget.error,
+      obscure: _obscure,
+      onChanged: widget.onChanged,
+      prefix: widget.prefix,
+      suffix: IconButton(
+        icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+        onPressed: () => setState(() => _obscure = !_obscure),
+      ),
+    );
+  }
+}
+
 class AppTextField extends StatelessWidget {
   final String label;
   final String? hint;
