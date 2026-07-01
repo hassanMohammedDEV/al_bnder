@@ -208,7 +208,7 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDeposit = txn.type == 'deposit';
+    final isCredit = txn.type == 'deposit' || txn.type == 'refund';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -217,8 +217,8 @@ class _TransactionTile extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              isDeposit ? Icons.arrow_downward : Icons.arrow_upward,
-              color: isDeposit ? Colors.green : scheme.error,
+              isCredit ? Icons.arrow_downward : Icons.arrow_upward,
+              color: isCredit ? Colors.green : scheme.error,
               size: 20,
             ),
             const SizedBox(width: 12),
@@ -226,7 +226,7 @@ class _TransactionTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(txn.description ?? (isDeposit ? 'إيداع' : 'سحب'),
+                  Text(txn.description ?? (isCredit ? 'إيداع' : 'سحب'),
                     style: const TextStyle(fontWeight: FontWeight.w500)),
                   Text(formatDateTime12(DateTime.parse(txn.createdAt)),
                     style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
@@ -234,10 +234,10 @@ class _TransactionTile extends StatelessWidget {
               ),
             ),
             Text(
-              '${isDeposit ? '+' : '-'}${txn.amount.toStringAsFixed(0)} ر.ي',
+              '${isCredit ? '+' : '-'}${txn.amount.toStringAsFixed(0)} ر.ي',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: isDeposit ? Colors.green : scheme.error,
+                color: isCredit ? Colors.green : scheme.error,
               ),
             ),
           ],

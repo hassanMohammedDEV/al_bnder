@@ -78,7 +78,7 @@ class SettingsScreen extends ConsumerWidget {
               ),
               title: const Text('لوحة الإدارة'),
               subtitle: Text('إدارة الملاعب والحجوزات', style: TextStyle(color: scheme.onSurfaceVariant)),
-              trailing: Icon(Icons.chevron_left, color: scheme.onSurfaceVariant),
+              trailing: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
               onTap: () => context.go('/admin/dashboard'),
             ),
           ),
@@ -101,10 +101,10 @@ class SettingsScreen extends ConsumerWidget {
               if (count > 0) {
                 return Badge(
                   label: Text('$count'),
-                  child: Icon(Icons.chevron_left, color: scheme.onSurfaceVariant),
+                  child: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
                 );
               }
-              return Icon(Icons.chevron_left, color: scheme.onSurfaceVariant);
+              return Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant);
             }),
             onTap: () => context.push('/announcements'),
           ),
@@ -123,7 +123,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
             title: const Text('الأوقات المتاحة'),
             subtitle: Text('عرض ومشاركة الأوقات الفارغة', style: TextStyle(color: scheme.onSurfaceVariant)),
-            trailing: Icon(Icons.chevron_left, color: scheme.onSurfaceVariant),
+            trailing: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
             onTap: () => context.push('/available-slots'),
           ),
         ),
@@ -178,7 +178,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 title: const Text('تواصل مع المطور'),
                 subtitle: const Text('عبر واتساب'),
-                trailing: const Icon(Icons.chevron_left),
+                trailing: const Icon(Icons.arrow_forward_ios),
                 onTap: () async {
                   final url = Uri.parse('https://wa.me/967730845718');
                   try {
@@ -192,9 +192,26 @@ class SettingsScreen extends ConsumerWidget {
         const SizedBox(height: 24),
         // Logout button
         OutlinedButton.icon(
-          onPressed: () {
-            ref.read(authStateProvider.notifier).logout();
-            context.go('/login');
+          onPressed: () async {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('تسجيل الخروج'),
+                content: const Text('هل أنت متأكد من تسجيل الخروج؟'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                    child: const Text('تسجيل الخروج'),
+                  ),
+                ],
+              ),
+            );
+            if (confirm == true) {
+              ref.read(authStateProvider.notifier).logout();
+              if (context.mounted) context.go('/login');
+            }
           },
           icon: const Icon(Icons.logout, color: Colors.red),
           label: const Text('تسجيل الخروج', style: TextStyle(color: Colors.red)),

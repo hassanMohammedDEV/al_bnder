@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../presentaion/shared/app_text_field.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../providers/admin_provider.dart';
 import '../../../../core/helpers/error_helper.dart';
+import '../../../../core/helpers/arabic_numbers.dart';
 
 class DepositScreen extends ConsumerStatefulWidget {
   const DepositScreen({super.key});
@@ -34,6 +36,11 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
     _descCtl.dispose();
     super.dispose();
   }
+
+  static final _fmt = NumberFormat('#,###');
+
+  String _f(double v) => _fmt.format(v);
+  String _w(double v) => numberToArabicWords(v.round());
 
   void _snack(String msg, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -82,6 +89,37 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
       return;
     }
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد الشحن'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('المستخدم: ${_selectedUser!['full_name'] ?? 'بدون اسم'}'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('المبلغ:', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                const SizedBox(width: 8),
+                Text('${_f(amount)} ر.ي',
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('(${_w(amount)})',
+              style: TextStyle(fontSize: 14, color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد الشحن')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     setState(() => _depositing = true);
     final auth = ref.read(authStateProvider);
     final result = await ref.read(adminActionProvider.notifier).depositWallet(
@@ -94,7 +132,7 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
 
     result.when(
       success: (_) {
-        _snack('تم الشحن بنجاح');
+        _snack('تم شحن ${_f(amount)} ر.ي بنجاح');
         _amountCtl.clear();
         _descCtl.clear();
         setState(() => _selectedUser = null);
@@ -125,7 +163,25 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('تأكيد الخصم'),
-        content: Text('هل أنت متأكد من خصم $amount ر.ي من محفظة المستخدم؟'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('المستخدم: ${_selectedUser!['full_name'] ?? 'بدون اسم'}'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('المبلغ:', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                const SizedBox(width: 8),
+                Text('${_f(amount)} ر.ي',
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('(${_w(amount)})',
+              style: TextStyle(fontSize: 14, color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد الخصم')),
@@ -146,7 +202,7 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
 
     result.when(
       success: (_) {
-        _snack('تم الخصم بنجاح');
+        _snack('تم خصم ${_f(amount)} ر.ي بنجاح');
         _amountCtl.clear();
         _descCtl.clear();
         setState(() => _selectedUser = null);
@@ -170,23 +226,37 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
           Row(
             children: [
               Expanded(
-                  child: AppTextField(
-                    label: 'رقم الجوال',
-                    hint: '05xxxxxxxx',
-                    controller: _searchCtl,
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [_PhoneInputFormatter()],
-                    onChanged: (_) => setState(() => _users = null),
-                    prefix: Icon(Icons.search, color: scheme.onSurfaceVariant),
-                  ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _searching ? null : _search,
-                child: _searching
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('بحث'),
-              ),
+                    child: AppTextField(
+                      label: 'رقم الجوال',
+                      hint: '05xxxxxxxx',
+                      controller: _searchCtl,
+                      keyboardType: TextInputType.phone,
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) {
+                        FocusScope.of(context).unfocus();
+                        _search();
+                      },
+                      inputFormatters: [_PhoneInputFormatter()],
+                      onChanged: (_) => setState(() => _users = null),
+                      suffix: IconButton(
+                        icon: Icon(Icons.search, color: scheme.onSurfaceVariant),
+                        onPressed: () {
+                          FocusScope.of(context).unfocus();
+                          _search();
+                        },
+                      ),
+                    ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _searching ? null : () {
+                    FocusScope.of(context).unfocus();
+                    _search();
+                  },
+                  child: _searching
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('بحث'),
+                ),
             ],
           ),
           if (_users != null) ...[

@@ -21,6 +21,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   DateTime? _endDate;
   List<Map<String, dynamic>> _bookings = [];
   List<Map<String, dynamic>> _walletOps = [];
+  Map<String, dynamic>? _analytics;
   var _loading = false;
   var _loaded = false;
 
@@ -37,7 +38,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       );
       return;
     }
-    setState(() { _loading = true; _walletOps = []; });
+    setState(() { _loading = true; _walletOps = []; _analytics = null; });
     final groupId = ref.read(selectedGroupProvider);
     final auth = ref.read(authStateProvider);
     final isAdmin = auth.role == 'facility_admin' || auth.role == 'super_admin';
@@ -65,6 +66,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       if (!mounted) return;
       opsResult.when(
         success: (data) => setState(() => _walletOps = data),
+        failure: (_) {},
+      );
+
+      final analyticsResult = await ref.read(reportsRepositoryProvider).getAnalytics(
+        facilityGroupId: groupId,
+        startDate: _startDate!,
+        endDate: _endDate!,
+      );
+      if (!mounted) return;
+      analyticsResult.when(
+        success: (data) => setState(() => _analytics = data),
         failure: (_) {},
       );
     }
@@ -293,6 +305,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           _DailyBreakdown(bookings: _bookings),
         ],
 
+        if (_analytics != null) ...[
+          const SizedBox(height: 20),
+          _UtilizationSection(data: _analytics!),
+          const SizedBox(height: 20),
+          _PeakHoursChart(data: _analytics!),
+        ],
+
         if (_walletOps.isNotEmpty) ...[
           const SizedBox(height: 20),
           _WalletOperationsSection(operations: _walletOps),
@@ -373,7 +392,7 @@ class _ReportSummary extends StatelessWidget {
               child: _MetricCard(
                 label: 'إجمالي الإيرادات',
                 value: totalRevenue.toStringAsFixed(0),
-                unit: 'ر.س',
+                unit: 'ر.ي',
                 icon: Icons.trending_up,
                 color: Colors.teal,
                 valueColor: Colors.teal,
@@ -385,7 +404,7 @@ class _ReportSummary extends StatelessWidget {
               child: _MetricCard(
                 label: 'مدفوع',
                 value: totalPaid.toStringAsFixed(0),
-                unit: 'ر.س',
+                unit: 'ر.ي',
                 icon: Icons.check_circle,
                 color: Colors.green,
                 valueColor: Colors.green,
@@ -397,7 +416,7 @@ class _ReportSummary extends StatelessWidget {
               child: _MetricCard(
                 label: 'متبقي',
                 value: outstanding.toStringAsFixed(0),
-                unit: 'ر.س',
+                unit: 'ر.ي',
                 icon: Icons.receipt_long,
                 color: outstanding > 0 ? Colors.orange : Colors.green,
                 valueColor: outstanding > 0 ? Colors.orange : Colors.green,
@@ -678,7 +697,7 @@ class _FacilityBreakdown extends StatelessWidget {
                           fontWeight: FontWeight.w600, color: scheme.onSurface,
                         )),
                       ),
-                      Text('${e.value.revenue.toStringAsFixed(0)} ر.س', style: TextStyle(
+                      Text('${e.value.revenue.toStringAsFixed(0)} ر.ي', style: TextStyle(
                         fontWeight: FontWeight.bold, color: scheme.primary,
                       )),
                     ],
@@ -702,7 +721,7 @@ class _FacilityBreakdown extends StatelessWidget {
                         fontSize: 12, color: scheme.onSurfaceVariant,
                       )),
                       const Spacer(),
-                      Text('مدفوع: ${e.value.paid.toStringAsFixed(0)} ر.س', style: TextStyle(
+                      Text('مدفوع: ${e.value.paid.toStringAsFixed(0)} ر.ي', style: TextStyle(
                         fontSize: 12, color: Colors.green.shade600,
                       )),
                     ],
@@ -811,7 +830,7 @@ class _DailyBreakdown extends StatelessWidget {
                       color: scheme.onSurfaceVariant, fontSize: 13,
                     )),
                   ),
-                  Text('${e.value.revenue.toStringAsFixed(0)} ر.س', style: TextStyle(
+                  Text('${e.value.revenue.toStringAsFixed(0)} ر.ي', style: TextStyle(
                     fontWeight: FontWeight.w600, color: scheme.onSurface,
                   )),
                 ],
@@ -876,7 +895,7 @@ class _WalletOperationsSection extends StatelessWidget {
               child: _MetricCard(
                 label: 'إجمالي الإيداع',
                 value: totalDeposits.toStringAsFixed(0),
-                unit: 'ر.س',
+                unit: 'ر.ي',
                 icon: Icons.add_circle,
                 color: Colors.green,
                 valueColor: Colors.green,
@@ -887,7 +906,7 @@ class _WalletOperationsSection extends StatelessWidget {
               child: _MetricCard(
                 label: 'إجمالي الخصم',
                 value: totalDeducts.toStringAsFixed(0),
-                unit: 'ر.س',
+                unit: 'ر.ي',
                 icon: Icons.remove_circle,
                 color: Colors.red,
                 valueColor: Colors.red,
@@ -944,7 +963,7 @@ class _WalletOpTile extends StatelessWidget {
               ),
             ),
             Text(
-              '${isDeposit ? '+' : '-'}$amount ر.س',
+              '${isDeposit ? '+' : '-'}$amount ر.ي',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: isDeposit ? Colors.green : scheme.error,
@@ -953,6 +972,162 @@ class _WalletOpTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _UtilizationSection extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _UtilizationSection({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final summary = data['summary'] as Map<String, dynamic>? ?? {};
+    final facilities = (data['facilities'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final overallUtil = (summary['overall_utilization'] as num?)?.toDouble() ?? 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(width: 4, height: 20,
+              decoration: BoxDecoration(color: Colors.indigo, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(width: 10),
+            Text('نسبة الإشغال', style: TextStyle(
+              fontSize: 17, fontWeight: FontWeight.bold, color: scheme.onSurface,
+            )),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: Column(
+            children: [
+              Text('${overallUtil.toStringAsFixed(0)}%', style: TextStyle(
+                fontSize: 42, fontWeight: FontWeight.bold,
+                color: overallUtil > 70 ? Colors.green : (overallUtil > 40 ? Colors.orange : scheme.error),
+              )),
+              Text('نسبة الإشغال الإجمالية', style: TextStyle(
+                fontSize: 13, color: scheme.onSurfaceVariant,
+              )),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        ...facilities.map((f) {
+          final util = (f['utilization_percent'] as num?)?.toDouble() ?? 0;
+          final name = f['facility_name'] as String? ?? '';
+          final booked = (f['booked_hours'] as num?)?.toDouble() ?? 0;
+          final available = (f['available_hours'] as num?)?.toDouble() ?? 0;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: Text(name, style: TextStyle(fontWeight: FontWeight.w500, color: scheme.onSurface))),
+                    Text('$booked / $available ساعة', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                    const SizedBox(width: 8),
+                    Text('${util.toStringAsFixed(0)}%', style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: util > 70 ? Colors.green : (util > 40 ? Colors.orange : scheme.error),
+                    )),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: util / 100,
+                    minHeight: 10,
+                    backgroundColor: scheme.surfaceContainerHighest,
+                    valueColor: AlwaysStoppedAnimation(
+                      util > 70 ? Colors.green : (util > 40 ? Colors.orange : scheme.error),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _PeakHoursChart extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _PeakHoursChart({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final peakHours = (data['peak_hours'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    if (peakHours.isEmpty) return const SizedBox.shrink();
+
+    final maxCount = peakHours.fold<int>(0,
+      (p, v) => (v['booking_count'] as int? ?? 0) > p ? (v['booking_count'] as int?)! : p);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(width: 4, height: 20,
+              decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(width: 10),
+            Text('أوقات الذروة', style: TextStyle(
+              fontSize: 17, fontWeight: FontWeight.bold, color: scheme.onSurface,
+            )),
+          ],
+        ),
+        const SizedBox(height: 14),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: peakHours.map((p) {
+              final hour = (p['hour'] as int?) ?? 0;
+              final count = (p['booking_count'] as int?) ?? 0;
+              final h = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+              final period = hour < 12 ? 'ص' : 'م';
+              final height = maxCount > 0 ? (count / maxCount * 140) : 0.0;
+
+              return Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('$count', style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: 28,
+                      height: height.clamp(4, 140),
+                      decoration: BoxDecoration(
+                        color: count == maxCount ? Colors.deepOrange : scheme.primary.withAlpha(180),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('$h $period', style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant)),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        if (peakHours.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Center(
+            child: Text('* عدد الحجوزات لكل ساعة في الفترة المحددة',
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant.withAlpha(150))),
+          ),
+        ],
+      ],
     );
   }
 }

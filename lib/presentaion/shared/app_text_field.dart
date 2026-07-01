@@ -11,6 +11,8 @@ class AppTextField extends StatelessWidget {
   final Widget? prefix;
   final Widget? suffix;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
   final int? maxLines;
   final bool readOnly;
   final VoidCallback? onTap;
@@ -27,6 +29,8 @@ class AppTextField extends StatelessWidget {
     this.prefix,
     this.suffix,
     this.keyboardType,
+    this.textInputAction,
+    this.onSubmitted,
     this.maxLines = 1,
     this.readOnly = false,
     this.onTap,
@@ -52,6 +56,8 @@ class AppTextField extends StatelessWidget {
           onChanged: onChanged,
           obscureText: obscure,
           keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          onFieldSubmitted: onSubmitted,
           maxLines: maxLines,
           readOnly: readOnly,
           onTap: onTap,

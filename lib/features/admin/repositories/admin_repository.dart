@@ -3,7 +3,7 @@ import 'package:app_platform_core/core.dart';
 abstract class AdminRepository {
   Future<Result<Map<String, dynamic>>> getDashboard({String? facilityGroupId});
   Future<Result<List<Map<String, dynamic>>>> getPendingBookings({String? facilityGroupId});
-  Future<Result<void>> confirmBooking(String bookingId);
+  Future<Result<void>> confirmBooking(String bookingId, {double paidAmount = 0});
   Future<Result<Map<String, dynamic>>> depositWallet({
     required String targetUserId,
     required String facilityGroupId,
@@ -60,6 +60,15 @@ abstract class AdminRepository {
   });
   Future<Result<void>> autoCancelExpiredBookings();
   Future<Result<Map<String, dynamic>>> adminCancelBooking(String bookingId);
+  Future<Result<Map<String, dynamic>>> shrinkBooking({
+    required String bookingId,
+    required DateTime newEndAt,
+  });
+  Future<Result<Map<String, dynamic>>> rescheduleBooking({
+    required String bookingId,
+    required DateTime newStartAt,
+    required DateTime newEndAt,
+  });
   Future<Result<List<Map<String, dynamic>>>> searchBookingsByPhone(String phoneQuery, {String? facilityGroupId});
   Future<Result<List<Map<String, dynamic>>>> searchBookingsByDateRange({
     String? facilityGroupId,

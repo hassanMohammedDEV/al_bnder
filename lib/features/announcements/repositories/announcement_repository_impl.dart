@@ -46,4 +46,11 @@ class AnnouncementRepositoryImpl implements AnnouncementRepository {
       'p_announcement_ids': announcementIds,
     }, parser: (_) {});
   }
+
+  @override
+  Future<Result<void>> deleteAnnouncement(String id) {
+    return _apiClient.post('rpc/delete_announcement', body: {
+      'p_announcement_id': id,
+    }, parser: (_) {});
+  }
 }

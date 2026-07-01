@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -66,6 +67,7 @@ class LoginScreen extends ConsumerWidget {
                   ref.read(authValidationProvider.notifier).validatePhone();
                 },
                 keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 prefix: Icon(Icons.phone, color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 20),

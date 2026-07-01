@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../presentaion/shared/time_picker_dialog.dart';
@@ -27,8 +28,17 @@ class _AdminSearchBookingsScreenState extends ConsumerState<AdminSearchBookingsS
   DateTime? _startDate;
   DateTime? _endDate;
 
+  String _normalizeDigits(String s) {
+    return s
+        .replaceAll('٠', '0').replaceAll('١', '1').replaceAll('٢', '2').replaceAll('٣', '3').replaceAll('٤', '4')
+        .replaceAll('٥', '5').replaceAll('٦', '6').replaceAll('٧', '7').replaceAll('٨', '8').replaceAll('٩', '9')
+        .replaceAll('۰', '0').replaceAll('۱', '1').replaceAll('۲', '2').replaceAll('۳', '3').replaceAll('۴', '4')
+        .replaceAll('۵', '5').replaceAll('۶', '6').replaceAll('۷', '7').replaceAll('۸', '8').replaceAll('۹', '9');
+  }
+
   Future<void> _searchByPhone() async {
-    final query = _searchCtl.text.trim();
+    FocusScope.of(context).unfocus();
+    final query = _normalizeDigits(_searchCtl.text.trim());
     if (query.isEmpty) return;
     setState(() => _loading = true);
     final groupId = ref.read(authStateProvider).facilityGroupId;
@@ -147,6 +157,8 @@ class _AdminSearchBookingsScreenState extends ConsumerState<AdminSearchBookingsS
               child: TextField(
                 controller: _searchCtl,
                 textDirection: TextDirection.ltr,
+                textInputAction: TextInputAction.search,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   hintText: 'أدخل رقم الجوال',
                   prefixIcon: const Icon(Icons.search),

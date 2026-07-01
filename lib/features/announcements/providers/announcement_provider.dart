@@ -85,4 +85,18 @@ class AnnouncementActionNotifier extends Notifier<ActionStore> {
     );
     return result;
   }
+
+  Future<Result<void>> deleteAnnouncement(String id) async {
+    const key = 'delete';
+    state = state.start(key);
+    final result = await ref.read(announcementRepositoryProvider).deleteAnnouncement(id);
+    result.when(
+      success: (_) {
+        state = state.success(key);
+        ref.read(announcementsProvider.notifier).load();
+      },
+      failure: (e) => state = state.fail(key, e),
+    );
+    return result;
+  }
 }

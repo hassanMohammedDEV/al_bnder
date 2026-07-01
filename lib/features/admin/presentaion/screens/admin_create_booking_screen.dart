@@ -31,8 +31,8 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
   String? _selectedFacilityId;
   String? _selectedGroupId; // for super_admin who has no facilityGroupId
   DateTime _selectedDate = DateTime.now();
-  int _startHour24 = 16;
-  int _endHour24 = 17;
+  int? _startHour24;
+  int? _endHour24;
   bool _submitting = false;
   List<BookedSlotInfo> _bookedSlots = [];
   int _open24 = 16;
@@ -131,10 +131,11 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
       );
     } catch (_) {}
 
-    setState(() => _loadingSlots = false);
+    if (mounted) setState(() => _loadingSlots = false);
   }
 
   Future<void> _pickDate() async {
+    if (_loadingSlots) return;
     final picked = await showDatePicker(
       context: context,
       firstDate: DateTime.now(),
@@ -149,6 +150,7 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
 
   Future<void> _pickTime({required bool isStart}) async {
     final initial = isStart ? _startHour24 : _endHour24;
+    if (initial == null) return;
     final initial12 = initial == 0 ? 12 : (initial > 12 ? initial - 12 : initial);
     final initialPm = initial >= 12;
 
@@ -191,7 +193,7 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
       setState(() {
         if (isStart) {
           _startHour24 = picked;
-          if (_endHour24 <= picked) _endHour24 = picked + 1;
+          if (_endHour24 != null && _endHour24! <= picked) _endHour24 = picked + 1;
         } else {
           _endHour24 = picked;
         }
@@ -207,7 +209,7 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
 
   Future<void> _submit() async {
     if (_selectedFacilityId == null) { _snack('اختر الملعب', isError: true); return; }
-    if (_endHour24 <= _startHour24) { _snack('وقت النهاية يجب أن يكون بعد وقت البداية', isError: true); return; }
+    if (_startHour24 == null || _endHour24 == null || _endHour24! <= _startHour24!) { _snack('اختر وقت البداية والنهاية', isError: true); return; }
     if (_isRecurring && _recurringDays.isEmpty) { _snack('اختر أيام التكرار', isError: true); return; }
     if (_isRecurring && _recurringEndDate == null) { _snack('اختر تاريخ انتهاء التكرار', isError: true); return; }
 
@@ -228,10 +230,10 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
     }
 
     final startAt = DateTime(
-      _selectedDate.year, _selectedDate.month, _selectedDate.day, _startHour24,
+      _selectedDate.year, _selectedDate.month, _selectedDate.day, _startHour24!,
     );
     final endAt = DateTime(
-      _selectedDate.year, _selectedDate.month, _selectedDate.day, _endHour24,
+      _selectedDate.year, _selectedDate.month, _selectedDate.day, _endHour24!,
     );
 
     Map<String, dynamic>? recurringRule;
@@ -284,9 +286,9 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('$facilityName - ${totalPrice.toStringAsFixed(0)} ر.س'),
+                Text('$facilityName - ${totalPrice.toStringAsFixed(0)} ر.ي'),
                 if (paidAmount > 0 && paidAmount < totalPrice)
-                  Text('المخصوم (عربون): ${paidAmount.toStringAsFixed(0)} ر.س',
+                  Text('المخصوم (عربون): ${paidAmount.toStringAsFixed(0)} ر.ي',
                     style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
                 if (isRecurring) ...[
                   const SizedBox(height: 4),
@@ -384,13 +386,27 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
                     hint: '05xxxxxxxx',
                     controller: _searchCtl,
                     keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) {
+                      FocusScope.of(context).unfocus();
+                      _searchUsers();
+                    },
                     onChanged: (_) => setState(() => _users = null),
-                    prefix: Icon(Icons.search, color: scheme.onSurfaceVariant),
+                    suffix: IconButton(
+                      icon: Icon(Icons.search, color: scheme.onSurfaceVariant),
+                      onPressed: () {
+                        FocusScope.of(context).unfocus();
+                        _searchUsers();
+                      },
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _searching ? null : _searchUsers,
+                  onPressed: _searching ? null : () {
+                    FocusScope.of(context).unfocus();
+                    _searchUsers();
+                  },
                   child: _searching
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('بحث'),
@@ -498,7 +514,7 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
                   initialValue: _selectedFacilityId,
                   items: active.map((f) => DropdownMenuItem(
                     value: f.id,
-                    child: Text('${f.name} (${f.pricePerHour.toStringAsFixed(0)} ر.س/س)'),
+                    child: Text('${f.name} (${f.pricePerHour.toStringAsFixed(0)} ر.ي/س)'),
                   )).toList(),
                   onChanged: (v) {
                     setState(() => _selectedFacilityId = v);
@@ -531,10 +547,17 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
                 bookedSlots: _bookedSlots,
                 pricePerHour: _selectedFacilityPrice,
                 onChanged: (sel) {
-                  setState(() {
-                    _startHour24 = sel.start;
-                    _endHour24 = sel.end ?? sel.start + 1;
-                  });
+                  if (sel.start == null) {
+                    setState(() {
+                      _startHour24 = null;
+                      _endHour24 = null;
+                    });
+                  } else {
+                    setState(() {
+                      _startHour24 = sel.start;
+                      _endHour24 = sel.end ?? sel.start! + 1;
+                    });
+                  }
                 },
               ),
             const SizedBox(height: 24),
@@ -659,7 +682,7 @@ class _AdminFieldCard extends StatelessWidget {
               const Spacer(),
               Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(width: 8),
-              Icon(Icons.chevron_left, color: scheme.onSurfaceVariant),
+              Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
             ],
           ),
         ),

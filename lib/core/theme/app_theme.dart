@@ -129,6 +129,15 @@ class AppTheme {
           ),
         ),
       ),
+      datePickerTheme: DatePickerThemeData(
+        confirmButtonStyle: ButtonStyle(
+          backgroundColor: WidgetStatePropertyAll(scheme.primary),
+          foregroundColor: WidgetStatePropertyAll(scheme.onPrimary),
+          minimumSize: const WidgetStatePropertyAll(Size(100, 48)),
+          textStyle: WidgetStatePropertyAll(const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        ),
+      ),
       dialogTheme: DialogThemeData(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),

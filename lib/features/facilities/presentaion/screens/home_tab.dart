@@ -39,7 +39,10 @@ class _HomeTabState extends ConsumerState<HomeTab> {
       onRefresh: () async {
         final selected = ref.read(selectedGroupProvider);
         ref.invalidate(facilityGroupsProvider);
-        if (selected != null) ref.invalidate(facilitiesProvider(selected));
+        if (selected != null) {
+          ref.invalidate(facilitiesProvider(selected));
+          ref.invalidate(walletInfoFamilyProvider(selected));
+        }
         await Future.delayed(const Duration(seconds: 1));
       },
       child: RepaintBoundary(
@@ -228,7 +231,7 @@ class _WalletCard extends ConsumerWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_left, color: Colors.white.withValues(alpha: 0.6)),
+            Icon(Icons.arrow_forward_ios, color: Colors.white.withValues(alpha: 0.6)),
           ],
         ),
       ),
@@ -326,7 +329,7 @@ class _FacilityCard extends ConsumerWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_left, color: scheme.onSurfaceVariant),
+              Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
             ],
           ),
         ),

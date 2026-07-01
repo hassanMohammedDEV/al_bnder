@@ -85,10 +85,11 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
       );
     } catch (_) {}
 
-    setState(() => _loadingSlots = false);
+    if (mounted) setState(() => _loadingSlots = false);
   }
 
   Future<void> _pickDate() async {
+    if (_loadingSlots) return;
     final form = ref.read(bookingFormProvider);
     final now = DateTime.now();
     final picked = await showDatePicker(
@@ -149,9 +150,9 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('رصيد المحفظة: ${balance.toStringAsFixed(0)} ر.س'),
-              Text('المبلغ الإجمالي: ${totalPrice.toStringAsFixed(0)} ر.س'),
-              Text('قيمة العربون: ${depositAmount.toStringAsFixed(0)} ر.س'),
+              Text('رصيد المحفظة: ${balance.toStringAsFixed(0)} ر.ي'),
+              Text('المبلغ الإجمالي: ${totalPrice.toStringAsFixed(0)} ر.ي'),
+              Text('قيمة العربون: ${depositAmount.toStringAsFixed(0)} ر.ي'),
               const SizedBox(height: 16),
               const Text('اختر طريقة الدفع:'),
             ],
@@ -159,12 +160,16 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop('deposit'),
-              child: Text('عربون (${depositAmount.toStringAsFixed(0)} ر.س)',
+              child: Text('عربون (${depositAmount.toStringAsFixed(0)} ر.ي)',
                 style: TextStyle(color: scheme.primary)),
             ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop('full'),
-              child: Text('دفع كامل (${totalPrice.toStringAsFixed(0)} ر.س)'),
+              child: Text('دفع كامل (${totalPrice.toStringAsFixed(0)} ر.ي)'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('إلغاء'),
             ),
           ],
         ),
@@ -180,9 +185,9 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('الرصيد الحالي: ${balance.toStringAsFixed(0)} ر.س'),
-              Text('سعر الحجز: ${totalPrice.toStringAsFixed(0)} ر.س'),
-              Text('العربون: ${depositAmount.toStringAsFixed(0)} ر.س'),
+              Text('الرصيد الحالي: ${balance.toStringAsFixed(0)} ر.ي'),
+              Text('سعر الحجز: ${totalPrice.toStringAsFixed(0)} ر.ي'),
+              Text('العربون: ${depositAmount.toStringAsFixed(0)} ر.ي'),
               const SizedBox(height: 12),
               const Text('سيتم خصم العربون فقط وتأكيد الحجز.'),
             ],
@@ -225,8 +230,6 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
         final paidAmount = (d?['paid_amount'] as num? ?? 0).toDouble();
         final balanceAfter = (d?['balance_after'] as num? ?? 0).toDouble();
         final facilityName = d?['facility_name'] as String? ?? '';
-        final bookingId = d?['booking_id'] as String? ?? '';
-
         ref.invalidate(walletInfoFamilyProvider(widget.facility.groupId));
 
         if (status == 'confirmed') {
@@ -234,14 +237,14 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$facilityName: $bookingId'),
+              Text(facilityName, style: const TextStyle(fontSize: 16)),
               const SizedBox(height: 8),
-              Text('المبلغ الإجمالي: ${totalPrice.toStringAsFixed(0)} ر.س'),
+              Text('المبلغ الإجمالي: ${totalPrice.toStringAsFixed(0)} ر.ي'),
               if (paidAmount < totalPrice)
-                Text('المبلغ المخصوم (عربون): ${paidAmount.toStringAsFixed(0)} ر.س')
+                Text('المبلغ المخصوم (عربون): ${paidAmount.toStringAsFixed(0)} ر.ي')
               else
-                Text('المبلغ المخصوم: ${paidAmount.toStringAsFixed(0)} ر.س'),
-              Text('الرصيد المتبقي: ${balanceAfter.toStringAsFixed(0)} ر.س'),
+                Text('المبلغ المخصوم: ${paidAmount.toStringAsFixed(0)} ر.ي'),
+              Text('الرصيد المتبقي: ${balanceAfter.toStringAsFixed(0)} ر.ي'),
             ],
           ));
         } else {
@@ -249,7 +252,7 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$facilityName - ${totalPrice.toStringAsFixed(0)} ر.س'),
+              Text('$facilityName - ${totalPrice.toStringAsFixed(0)} ر.ي'),
               const SizedBox(height: 12),
               const Text('الحجز بانتظار التأكيد من إدارة الملعب.'),
               const SizedBox(height: 8),
@@ -306,7 +309,7 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
                     fontSize: 18, fontWeight: FontWeight.bold, color: scheme.onPrimaryContainer,
                   )),
                   const SizedBox(height: 8),
-                  Text('${form.pricePerHour.toStringAsFixed(0)} ر.س / ساعة', style: TextStyle(
+                  Text('${form.pricePerHour.toStringAsFixed(0)} ر.ي / ساعة', style: TextStyle(
                     color: scheme.onPrimaryContainer,
                   )),
                 ],
@@ -333,10 +336,17 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
               bookedSlots: _bookedSlots,
               pricePerHour: form.pricePerHour,
               onChanged: (sel) {
-                setState(() {
-                  _startHour = sel.start;
-                  _endHour = sel.end;
-                });
+                if (sel.start == null) {
+                  setState(() {
+                    _startHour = null;
+                    _endHour = null;
+                  });
+                } else {
+                  setState(() {
+                    _startHour = sel.start;
+                    _endHour = sel.end ?? sel.start! + 1;
+                  });
+                }
               },
             ),
           const SizedBox(height: 32),
@@ -383,7 +393,7 @@ class _FieldCard extends StatelessWidget {
               const Spacer(),
               Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(width: 8),
-              Icon(Icons.chevron_left, color: scheme.onSurfaceVariant),
+              Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
             ],
           ),
         ),

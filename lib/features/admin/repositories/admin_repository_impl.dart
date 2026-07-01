@@ -42,9 +42,10 @@ class AdminRepositoryImpl implements AdminRepository {
   }
 
   @override
-  Future<Result<void>> confirmBooking(String bookingId) {
+  Future<Result<void>> confirmBooking(String bookingId, {double paidAmount = 0}) {
     return _apiClient.post('rpc/admin_confirm_booking', body: {
       'p_booking_id': bookingId,
+      'p_paid_amount': paidAmount,
     }, parser: (_) {});
   }
 
@@ -242,6 +243,30 @@ class AdminRepositoryImpl implements AdminRepository {
   Future<Result<Map<String, dynamic>>> adminCancelBooking(String bookingId) {
     return _apiClient.post('rpc/cancel_booking', body: {
       'p_booking_id': bookingId,
+    }, parser: (json) => json as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Result<Map<String, dynamic>>> shrinkBooking({
+    required String bookingId,
+    required DateTime newEndAt,
+  }) {
+    return _apiClient.post('rpc/admin_shrink_booking', body: {
+      'p_booking_id': bookingId,
+      'p_new_end_at': newEndAt.toUtc().toIso8601String(),
+    }, parser: (json) => json as Map<String, dynamic>);
+  }
+
+  @override
+  Future<Result<Map<String, dynamic>>> rescheduleBooking({
+    required String bookingId,
+    required DateTime newStartAt,
+    required DateTime newEndAt,
+  }) {
+    return _apiClient.post('rpc/admin_reschedule_booking', body: {
+      'p_booking_id': bookingId,
+      'p_new_start_at': newStartAt.toUtc().toIso8601String(),
+      'p_new_end_at': newEndAt.toUtc().toIso8601String(),
     }, parser: (json) => json as Map<String, dynamic>);
   }
 

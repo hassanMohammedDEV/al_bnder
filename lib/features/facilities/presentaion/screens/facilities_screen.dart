@@ -83,7 +83,7 @@ class _FacilityCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_left, color: scheme.onSurfaceVariant),
+              Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
             ],
           ),
         ),

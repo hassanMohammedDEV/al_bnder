@@ -12,4 +12,10 @@ abstract class ReportsRepository {
     required DateTime startDate,
     required DateTime endDate,
   });
+
+  Future<Result<Map<String, dynamic>>> getAnalytics({
+    required String facilityGroupId,
+    required DateTime startDate,
+    required DateTime endDate,
+  });
 }

@@ -19,10 +19,13 @@ class AvailableSlotsScreen extends ConsumerStatefulWidget {
 }
 
 class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
-  DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
-  GroupAvailability? _result;
+  DateTime _startDate = DateTime.now().add(const Duration(days: 1));
+  DateTime _endDate = DateTime.now().add(const Duration(days: 3));
+  final List<_DayResult> _results = [];
   bool _loading = false;
   String? _error;
+  int _loadingDay = 0;
+  int _totalDays = 0;
 
   Future<void> _fetch() async {
     final groupId = ref.read(selectedGroupProvider);
@@ -33,36 +36,66 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
       return;
     }
 
-    setState(() { _loading = true; _error = null; _result = null; });
+    final days = _endDate.difference(_startDate).inDays + 1;
+    if (days > 7) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يمكن اختيار 7 أيام كحد أقصى')),
+      );
+      return;
+    }
+
+    setState(() { _loading = true; _error = null; _results.clear(); _totalDays = days; _loadingDay = 0; });
 
     final repo = ref.read(availabilityRepositoryProvider);
-    final result = await repo.getAvailableSlots(
-      facilityGroupId: groupId,
-      date: DateFormat('yyyy-MM-dd').format(_selectedDate),
-    );
 
-    if (!mounted) return;
-    result.when(
-      success: (data) => setState(() { _result = data; _loading = false; }),
-      failure: (e) => setState(() { _error = e is NetworkError ? e.message : 'فشل التحميل'; _loading = false; }),
-    );
+    for (int i = 0; i < days; i++) {
+      final date = _startDate.add(Duration(days: i));
+      if (!mounted) return;
+      setState(() => _loadingDay = i + 1);
+
+      final result = await repo.getAvailableSlots(
+        facilityGroupId: groupId,
+        date: DateFormat('yyyy-MM-dd').format(date),
+      );
+
+      if (!mounted) return;
+      result.when(
+        success: (data) => _results.add(_DayResult(date: date, data: data)),
+        failure: (e) {
+          if (mounted) setState(() => _error = e is NetworkError ? e.message : 'فشل تحميل يوم ${DateFormat('d/M', 'ar').format(date)}');
+        },
+      );
+    }
+
+    if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+  Future<void> _pickDateRange() async {
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: _selectedDate,
+      initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 90)),
+      helpText: 'اختر نطاق التاريخ',
+      confirmText: 'اختيار',
+      cancelText: 'إلغاء',
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+    if (picked != null) {
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
+        _results.clear();
+        _error = null;
+      });
+    }
   }
 
   List<_FreeSlot> _computeFreeSlots(String open, String close, List<BookedSlot> booked) {
     final openParts = open.split(':');
     final closeParts = close.split(':');
     final openMin = int.parse(openParts[0]) * 60 + int.parse(openParts[1]);
-    final closeMin = int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
+    int closeMin = int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
+    if (closeMin <= openMin) closeMin += 24 * 60;
 
     final slots = <_FreeSlot>[];
     final sorted = List<BookedSlot>.from(booked)
@@ -70,8 +103,8 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
 
     int cursor = openMin;
     for (final b in sorted) {
-      final start = DateTime.parse(b.startAt);
-      final end = DateTime.parse(b.endAt);
+      final start = DateTime.parse(b.startAt).toLocal();
+      final end = DateTime.parse(b.endAt).toLocal();
       final startMin = start.hour * 60 + start.minute;
       final endMin = end.hour * 60 + end.minute;
 
@@ -89,31 +122,35 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   }
 
   String _buildShareText() {
-    if (_result == null) return '';
+    if (_results.isEmpty) return '';
     final buf = StringBuffer();
-    final dateStr = DateFormat('EEEE d MMMM y', 'ar').format(_selectedDate);
-    buf.writeln('📅 $dateStr');
-    buf.writeln('🏟️ ${_result!.groupName}');
+    buf.writeln('🏟️ ${_results.first.data.groupName}');
     buf.writeln('');
 
-    for (final f in _result!.facilities) {
-      final freeSlots = _computeFreeSlots(
-        _result!.openingTime ?? '00:00',
-        _result!.closingTime ?? '00:00',
-        f.bookedSlots,
-      );
-
-      buf.writeln('${f.name} (${f.pricePerHour.toInt()} ر.ي/ساعة):');
-      if (freeSlots.isEmpty) {
-        buf.writeln('❌ لا توجد أوقات متاحة');
-      } else {
-        for (final s in freeSlots) {
-          final startStr = _to12h(s.start);
-          final endStr = _to12h(s.end);
-          buf.writeln('🟢 $startStr - $endStr');
-        }
-      }
+    for (final day in _results) {
+      final dateStr = DateFormat('EEEE d MMMM y', 'ar').format(day.date);
+      buf.writeln('📅 $dateStr');
       buf.writeln('');
+
+      for (final f in day.data.facilities) {
+        final freeSlots = _computeFreeSlots(
+          day.data.openingTime ?? '00:00',
+          day.data.closingTime ?? '00:00',
+          f.bookedSlots,
+        );
+
+        buf.writeln('${f.name} (${f.pricePerHour.toInt()} ر.ي/ساعة):');
+        if (freeSlots.isEmpty) {
+          buf.writeln('❌ لا توجد أوقات متاحة');
+        } else {
+          for (final s in freeSlots) {
+            final startStr = _to12h(s.start);
+            final endStr = _to12h(s.end);
+            buf.writeln('🟢 $startStr - $endStr');
+          }
+        }
+        buf.writeln('');
+      }
     }
 
     buf.writeln('---');
@@ -166,13 +203,18 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
           ),
           const SizedBox(height: 16),
         ],
-        // Date picker card
+        // Date range card
         Card(
           child: ListTile(
-            leading: Icon(Icons.calendar_today, color: scheme.primary),
-            title: Text(DateFormat('EEEE d MMMM y', 'ar').format(_selectedDate)),
+            leading: Icon(Icons.date_range, color: scheme.primary),
+            title: Text(
+              '${DateFormat('d MMM', 'ar').format(_startDate)} - ${DateFormat('d MMM y', 'ar').format(_endDate)}',
+              style: const TextStyle(fontSize: 15),
+            ),
+            subtitle: Text('${_endDate.difference(_startDate).inDays + 1} أيام',
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
             trailing: const Icon(Icons.edit_calendar),
-            onTap: _pickDate,
+            onTap: _pickDateRange,
           ),
         ),
         const SizedBox(height: 12),
@@ -182,7 +224,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
           icon: _loading
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.search),
-          label: Text(_loading ? 'جار البحث...' : 'عرض الأوقات المتاحة'),
+          label: Text(_loading ? 'جار البحث... ($_loadingDay/$_totalDays)' : 'عرض الأوقات المتاحة'),
           style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
         ),
         const SizedBox(height: 16),
@@ -202,25 +244,29 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
               ],
             ),
           ),
-        // Results
-        if (_result != null) ...[
+        // Results per day
+        for (int i = 0; i < _results.length; i++) ...[
+          const Divider(height: 8),
           Text(
-            '${_result!.groupName} | ${DateFormat('EEEE d MMMM y', 'ar').format(_selectedDate)}',
+            '${DateFormat('EEEE d MMMM y', 'ar').format(_results[i].date)} | ${_results[i].data.groupName}',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: scheme.primary),
           ),
-          if (_result!.openingTime != null)
+          if (_results[i].data.openingTime != null)
             Text(
-              'ساعات العمل: ${_formatTimeOnly(_result!.openingTime!)} - ${_formatTimeOnly(_result!.closingTime ?? '')}',
+              'ساعات العمل: ${_formatTimeOnly(_results[i].data.openingTime!)} - ${_formatTimeOnly(_results[i].data.closingTime ?? '')}',
               style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
             ),
           const SizedBox(height: 12),
-          ..._result!.facilities.map((f) => _FacilitySlotsCard(
+          ..._results[i].data.facilities.map((f) => _FacilitySlotsCard(
             facility: f,
-            open: _result!.openingTime ?? '00:00',
-            close: _result!.closingTime ?? '00:00',
+            open: _results[i].data.openingTime ?? '00:00',
+            close: _results[i].data.closingTime ?? '00:00',
             scheme: scheme,
           )),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+        ],
+        if (_results.isNotEmpty) ...[
+          const SizedBox(height: 8),
           // Share buttons
           Row(
             children: [
@@ -284,6 +330,12 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   }
 }
 
+class _DayResult {
+  final DateTime date;
+  final GroupAvailability data;
+  const _DayResult({required this.date, required this.data});
+}
+
 class _FreeSlot {
   final int start;
   final int end;
@@ -339,7 +391,12 @@ class _FacilitySlotsCard extends StatelessWidget {
   }
 
   String _formatSlotTime(String iso) {
-    return DateFormat('h:mm a').format(DateTime.parse(iso));
+    final dt = DateTime.parse(iso).toLocal();
+    final h = dt.hour;
+    final m = dt.minute.toString().padLeft(2, '0');
+    final period = h >= 12 ? 'م' : 'ص';
+    final hour12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+    return '$hour12:$m $period';
   }
 
   String _statusLabel(String status) {

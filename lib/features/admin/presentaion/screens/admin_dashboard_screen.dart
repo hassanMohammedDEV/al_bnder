@@ -218,7 +218,7 @@ class _StatsSection extends StatelessWidget {
               child: isSuperAdmin
                   ? _StatCard(
                       title: 'المستحق للمطور',
-                      value: '${totals.developerDue.toStringAsFixed(0)} ر.س',
+                      value: '${totals.developerDue.toStringAsFixed(0)} ر.ي',
                       icon: Icons.payments,
                       color: Colors.red,
                       onTap: onSettle,
@@ -265,7 +265,7 @@ class _StatsSection extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 title: 'الإيرادات',
-                value: '${totals.totalRevenue.toStringAsFixed(0)} ر.س',
+                value: '${totals.totalRevenue.toStringAsFixed(0)} ر.ي',
                 icon: Icons.trending_up,
                 color: Colors.teal,
               ),
@@ -274,7 +274,7 @@ class _StatsSection extends StatelessWidget {
             Expanded(
               child: _StatCard(
                 title: 'الإيداعات',
-                value: '${totals.totalDeposits.toStringAsFixed(0)} ر.س',
+                value: '${totals.totalDeposits.toStringAsFixed(0)} ر.ي',
                 icon: Icons.account_balance,
                 color: Colors.indigo,
               ),
@@ -509,7 +509,7 @@ class _MenuItem extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_left, color: scheme.onSurfaceVariant),
+              Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
             ],
           ),
         ),

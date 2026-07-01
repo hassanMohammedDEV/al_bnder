@@ -1,7 +1,7 @@
 name: al_bndr
 description: "Al Bndr - Booking Management System"
 publish_to: 'none'
-version: 1.0.0+4
+version: 1.0.0+10
 
 environment:
   sdk: ^3.12.1

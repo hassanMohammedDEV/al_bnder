@@ -45,4 +45,20 @@ class ReportsRepositoryImpl implements ReportsRepository {
       return data.cast<Map<String, dynamic>>();
     });
   }
+
+  @override
+  Future<Result<Map<String, dynamic>>> getAnalytics({
+    required String facilityGroupId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) {
+    return _apiClient.post('rpc/get_facility_analytics', body: {
+      'p_facility_group_id': facilityGroupId,
+      'p_start_date': startDate.toIso8601String().substring(0, 10),
+      'p_end_date': endDate.toIso8601String().substring(0, 10),
+    }, parser: (json) {
+      final data = (json as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+      return data;
+    });
+  }
 }

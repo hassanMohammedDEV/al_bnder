@@ -2,6 +2,7 @@ import 'package:app_platform_state/state.dart';
 import 'package:app_platform_ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../presentaion/shared/time_picker_dialog.dart';
 import '../../providers/admin_provider.dart';
@@ -23,26 +24,96 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
     Future.microtask(() => ref.read(pendingBookingsProvider.notifier).load());
   }
 
-  Future<void> _confirm(String bookingId) async {
-    final confirmed = await showDialog<bool>(
+  Future<void> _confirm(String bookingId, double totalPrice) async {
+    final paidAmount = await showDialog<double>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تأكيد الحجز'),
-        content: const Text('هل أنت متأكد من تأكيد هذا الحجز؟ (تم الدفع خارجياً عبر واتساب)'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('رجوع')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد')),
-        ],
-      ),
+      builder: (ctx) {
+        String? option;
+        final depositCtl = TextEditingController();
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('تأكيد الحجز'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('هل تم استلام الدفع؟', style: TextStyle(fontSize: 15)),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () => setDialogState(() { option = 'none'; depositCtl.clear(); }),
+                  child: Row(
+                    children: [
+                      Radio<String?>(value: 'none', groupValue: option, onChanged: (v) => setDialogState(() { option = v; depositCtl.clear(); })),
+                      const Text('لم يتم الدفع', style: TextStyle(fontSize: 14)),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () => setDialogState(() => option = 'deposit'),
+                  child: Row(
+                    children: [
+                      Radio<String?>(value: 'deposit', groupValue: option, onChanged: (v) => setDialogState(() => option = v)),
+                      const Text('عربون', style: TextStyle(fontSize: 14)),
+                    ],
+                  ),
+                ),
+                if (option == 'deposit')
+                  Padding(
+                    padding: const EdgeInsets.only(left: 40, bottom: 8),
+                    child: TextField(
+                      controller: depositCtl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'المبلغ',
+                        suffixText: 'ر.ي',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                InkWell(
+                  onTap: () => setDialogState(() { option = 'full'; depositCtl.clear(); }),
+                  child: Row(
+                    children: [
+                      Radio<String?>(value: 'full', groupValue: option, onChanged: (v) => setDialogState(() { option = v; depositCtl.clear(); })),
+                      Text('المبلغ كامل (${totalPrice.toStringAsFixed(0)} ر.ي)', style: const TextStyle(fontSize: 14)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
+              FilledButton(
+                onPressed: () {
+                  if (option == 'none') Navigator.pop(ctx, 0);
+                  else if (option == 'full') Navigator.pop(ctx, totalPrice);
+                  else if (option == 'deposit') {
+                    final v = double.tryParse(depositCtl.text);
+                    if (v != null && v > 0) Navigator.pop(ctx, v);
+                  }
+                },
+                child: const Text('تأكيد'),
+              ),
+            ],
+          ),
+        );
+      },
     );
-    if (confirmed != true) return;
+    if (paidAmount == null) return;
 
-    final result = await ref.read(adminActionProvider.notifier).confirmBooking(bookingId);
+    final result = await ref.read(adminActionProvider.notifier).confirmBooking(bookingId, paidAmount: paidAmount);
     if (!mounted) return;
     result.when(
       success: (_) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم تأكيد الحجز بنجاح')),
+          SnackBar(
+            content: Text(
+              paidAmount > 0
+                  ? 'تم تأكيد الحجز (المدفوع: ${paidAmount.toStringAsFixed(0)} ر.ي)'
+                  : 'تم تأكيد الحجز (لم يتم الدفع)',
+            ),
+          ),
         );
       },
       failure: (e) {
@@ -104,8 +175,9 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
     if (!mounted) return;
     result.when(
       success: (_) {
+        final fmt = NumberFormat('#,###');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تم شحن $amount ر.ي بنجاح')),
+          SnackBar(content: Text('تم شحن ${fmt.format(amount)} ر.ي بنجاح')),
         );
       },
       failure: (e) {
@@ -242,7 +314,7 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
               children: [
                 Expanded(
                   child: FilledButton(
-                    onPressed: isProcessing ? null : () => _confirm(id),
+                    onPressed: isProcessing ? null : () => _confirm(id, (booking['total_price'] as num?)?.toDouble() ?? 0),
                     style: FilledButton.styleFrom(backgroundColor: Colors.green),
                     child: action.isLoading('confirm')
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))

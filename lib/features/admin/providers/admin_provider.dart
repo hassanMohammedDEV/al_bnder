@@ -63,10 +63,10 @@ class AdminActionNotifier extends StateNotifier<ActionStore> {
 
   final Ref ref;
 
-  Future<Result<void>> confirmBooking(String bookingId) async {
+  Future<Result<void>> confirmBooking(String bookingId, {double paidAmount = 0}) async {
     const key = 'confirm';
     state = state.start(key);
-    final result = await ref.read(adminRepositoryProvider).confirmBooking(bookingId);
+    final result = await ref.read(adminRepositoryProvider).confirmBooking(bookingId, paidAmount: paidAmount);
     result.when(
       success: (_) {
         state = state.success(key);
@@ -158,6 +158,26 @@ class AdminActionNotifier extends StateNotifier<ActionStore> {
     );
     result.when(
       success: (_) => state = state.success(key),
+      failure: (e) => state = state.fail(key, e),
+    );
+    return result;
+  }
+
+  Future<Result<Map<String, dynamic>>> shrinkBooking({
+    required String bookingId,
+    required DateTime newEndAt,
+  }) async {
+    const key = 'shrink';
+    state = state.start(key);
+    final result = await ref.read(adminRepositoryProvider).shrinkBooking(
+      bookingId: bookingId,
+      newEndAt: newEndAt,
+    );
+    result.when(
+      success: (_) {
+        state = state.success(key);
+        ref.invalidate(dashboardProvider);
+      },
       failure: (e) => state = state.fail(key, e),
     );
     return result;

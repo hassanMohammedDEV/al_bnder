@@ -369,7 +369,8 @@ $$;
 -- Body: { "booking_id": "uuid" }
 -- -------------------------------------------------------
 CREATE OR REPLACE FUNCTION admin_confirm_booking(
-  p_booking_id UUID
+  p_booking_id UUID,
+  p_paid_amount DECIMAL DEFAULT 0
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -405,7 +406,14 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'message', 'غير مصرح: هذا الحجز ليس لمجموعتك', 'data', null);
   END IF;
 
-  UPDATE bookings SET status = 'confirmed', approval_deadline = NULL, updated_at = now() WHERE id = p_booking_id;
+  UPDATE bookings SET
+    status = 'confirmed',
+    approval_deadline = NULL,
+    paid_amount = COALESCE(p_paid_amount, 0),
+    payment_status = CASE WHEN COALESCE(p_paid_amount, 0) > 0 THEN 'paid' ELSE 'unpaid' END,
+    updated_at = now()
+  WHERE id = p_booking_id;
+
   UPDATE booking_instances SET status = 'confirmed' WHERE booking_id = p_booking_id;
 
   RETURN jsonb_build_object(
@@ -413,7 +421,9 @@ BEGIN
     'message', 'تم تأكيد الحجز',
     'data', jsonb_build_object(
       'booking_id', p_booking_id,
-      'status', 'confirmed'
+      'status', 'confirmed',
+      'paid_amount', COALESCE(p_paid_amount, 0),
+      'payment_status', CASE WHEN COALESCE(p_paid_amount, 0) > 0 THEN 'paid' ELSE 'unpaid' END
     )
   );
 END;
@@ -2311,10 +2321,8 @@ DECLARE
   v_admin_role TEXT;
 BEGIN
   -- Get caller info
-  SELECT raw_user_meta_data->>'role', raw_user_meta_data->>'facility_group_id'
-  INTO v_admin_role, v_admin_group::TEXT
-  FROM auth.users WHERE id = auth.uid();
-  v_admin_group := v_admin_group::UUID;
+  SELECT role, facility_group_id INTO v_admin_role, v_admin_group
+  FROM profiles WHERE id = auth.uid();
 
   -- Permission: super_admin or same group
   IF v_admin_role NOT IN ('super_admin', 'facility_admin', 'facility_viewer') THEN
@@ -2344,7 +2352,7 @@ BEGIN
   FROM booking_instances bi
   JOIN bookings b ON b.id = bi.booking_id
   JOIN facilities f ON f.id = b.facility_id
-  JOIN facility_groups fg ON fg.id = f.facility_group_id
+  JOIN facility_groups fg ON fg.id = f.group_id
   LEFT JOIN profiles p ON p.id = b.user_id
   WHERE bi.qr_token = p_qr_token
     AND (v_admin_role = 'super_admin' OR fg.id = v_admin_group)
@@ -2523,6 +2531,37 @@ $$;
 
 GRANT EXECUTE ON FUNCTION get_unread_announcement_count TO authenticated;
 
+-- ===== RPC: delete_announcement =====
+CREATE OR REPLACE FUNCTION delete_announcement(p_announcement_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_role TEXT;
+  v_sender_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+  v_role := COALESCE((SELECT raw_user_meta_data->>'role' FROM auth.users WHERE id = v_user_id), '');
+
+  SELECT sender_id INTO v_sender_id FROM announcements WHERE id = p_announcement_id;
+  IF v_sender_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'الإشعار غير موجود');
+  END IF;
+
+  IF v_role = 'super_admin' OR v_sender_id = v_user_id THEN
+    DELETE FROM announcements WHERE id = p_announcement_id;
+    RETURN jsonb_build_object('success', true, 'message', 'تم حذف الإشعار');
+  ELSE
+    RETURN jsonb_build_object('success', false, 'message', 'ليس لديك صلاحية حذف هذا الإشعار');
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION delete_announcement TO authenticated;
+
 -- Add phone column for WhatsApp contact
 ALTER TABLE facility_groups ADD COLUMN IF NOT EXISTS phone TEXT;
 
@@ -2663,3 +2702,817 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_wallet_operations_report TO authenticated;
+
+-- =============================================
+-- ADMIN SHRINK BOOKING
+-- =============================================
+CREATE OR REPLACE FUNCTION admin_shrink_booking(
+  p_booking_id   UUID,
+  p_new_end_at   TIMESTAMPTZ
+) RETURNS JSONB
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_admin_id      UUID;
+  v_admin_role    TEXT;
+  v_admin_group   UUID;
+  v_booking       RECORD;
+  v_instance      RECORD;
+  v_facility      RECORD;
+  v_old_minutes   NUMERIC;
+  v_new_minutes   NUMERIC;
+  v_old_price     NUMERIC(10,2);
+  v_new_price     NUMERIC(10,2);
+  v_refund        NUMERIC(10,2) := 0;
+  v_wallet_id     UUID;
+  v_deposit_amt   NUMERIC(10,2);
+BEGIN
+  v_admin_id := auth.uid();
+  SELECT raw_user_meta_data->>'role', raw_user_meta_data->>'facility_group_id'
+  INTO v_admin_role, v_admin_group::TEXT
+  FROM auth.users WHERE id = v_admin_id;
+  v_admin_group := v_admin_group::UUID;
+
+  IF v_admin_role NOT IN ('facility_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  SELECT b.*, f.group_id, f.price_per_hour
+  INTO v_booking
+  FROM bookings b
+  JOIN facilities f ON f.id = b.facility_id
+  WHERE b.id = p_booking_id
+  FOR UPDATE OF b;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'الحجز غير موجود');
+  END IF;
+
+  IF v_booking.status IN ('cancelled', 'completed') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'لا يمكن تعديل حجز ملغي أو منتهي');
+  END IF;
+
+  IF v_admin_role != 'super_admin' AND v_booking.group_id != v_admin_group THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح بهذا الحجز');
+  END IF;
+
+  SELECT * INTO v_instance
+  FROM booking_instances
+  WHERE booking_id = p_booking_id
+  ORDER BY start_at ASC
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'لا توجد تفاصيل للحجز');
+  END IF;
+
+  IF p_new_end_at <= v_instance.start_at THEN
+    RETURN jsonb_build_object('success', false, 'message', 'وقت النهاية الجديد يجب أن يكون بعد وقت البداية');
+  END IF;
+
+  IF p_new_end_at >= v_instance.end_at THEN
+    RETURN jsonb_build_object('success', false, 'message', 'وقت النهاية الجديد يجب أن يكون أقل من وقت النهاية الحالي');
+  END IF;
+
+  IF v_instance.status IN ('cancelled', 'completed') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'لا يمكن تعديل حجز ملغي أو منتهي');
+  END IF;
+
+  v_old_minutes := EXTRACT(EPOCH FROM (v_instance.end_at - v_instance.start_at)) / 60;
+  v_new_minutes := EXTRACT(EPOCH FROM (p_new_end_at - v_instance.start_at)) / 60;
+  v_old_price := v_instance.price;
+  v_new_price := ROUND((v_old_price * v_new_minutes / v_old_minutes)::NUMERIC, 2);
+
+  -- Refund logic for full payment bookings
+  IF v_booking.payment_status = 'paid'
+     AND v_booking.paid_amount >= v_booking.total_price
+     AND v_booking.is_admin_booking = false
+  THEN
+    v_refund := v_old_price - v_new_price;
+    IF v_refund > 0 THEN
+      SELECT id INTO v_wallet_id
+      FROM wallets
+      WHERE user_id = v_booking.user_id
+        AND facility_group_id = v_booking.group_id;
+
+      IF FOUND THEN
+        UPDATE wallets SET balance = balance + v_refund WHERE id = v_wallet_id;
+        INSERT INTO wallet_transactions (wallet_id, amount, type, reference_type, reference_id, description, created_by)
+        VALUES (v_wallet_id, v_refund, 'refund', 'refund', p_booking_id,
+                'استرداد تقليص حجز: ' || p_booking_id::TEXT, v_admin_id);
+      END IF;
+
+      -- Update booking payment_status to partially refunded
+      UPDATE bookings
+      SET payment_status = 'refunded',
+          updated_at = now()
+      WHERE id = p_booking_id;
+    END IF;
+  END IF;
+
+  -- Update the instance
+  UPDATE booking_instances
+  SET end_at = p_new_end_at,
+      price = v_new_price
+  WHERE id = v_instance.id;
+
+  -- Update booking total_price (recalculate from all instances)
+  UPDATE bookings
+  SET total_price = (
+    SELECT COALESCE(SUM(price), 0)
+    FROM booking_instances
+    WHERE booking_id = p_booking_id
+  ),
+  updated_at = now()
+  WHERE id = p_booking_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم تقليص الحجز بنجاح',
+    'refund_amount', v_refund,
+    'old_price', v_old_price,
+    'new_price', v_new_price
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_shrink_booking TO authenticated;
+
+-- ===== Advertisements Feature (using user's advertisements table) =====
+
+ALTER TABLE public.advertisements ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "advertisements_select" ON public.advertisements;
+CREATE POLICY "advertisements_select" ON public.advertisements
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "advertisements_insert" ON public.advertisements;
+CREATE POLICY "advertisements_insert" ON public.advertisements
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM auth.users
+      WHERE id = auth.uid()
+        AND raw_user_meta_data->>'role' IN ('facility_admin', 'super_admin')
+    )
+  );
+
+DROP POLICY IF EXISTS "advertisements_update" ON public.advertisements;
+CREATE POLICY "advertisements_update" ON public.advertisements
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM auth.users
+      WHERE id = auth.uid()
+        AND raw_user_meta_data->>'role' IN ('facility_admin', 'super_admin')
+    )
+  );
+
+DROP POLICY IF EXISTS "advertisements_delete" ON public.advertisements;
+CREATE POLICY "advertisements_delete" ON public.advertisements
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM auth.users
+      WHERE id = auth.uid()
+        AND raw_user_meta_data->>'role' IN ('facility_admin', 'super_admin')
+    )
+  );
+
+-- ===== RPC: get_advertisements =====
+CREATE OR REPLACE FUNCTION get_advertisements(p_facility_group_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_result JSONB;
+BEGIN
+  SELECT jsonb_build_object(
+    'success', true,
+    'data', COALESCE(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', a.id,
+          'facility_group_id', a.facility_group_id,
+          'title', a.title,
+          'description', a.description,
+          'image_url', a.image_url,
+          'link_url', a.link_url,
+          'is_active', a.is_active,
+          'starts_at', a.starts_at,
+          'ends_at', a.ends_at,
+          'created_at', a.created_at,
+          'updated_at', a.updated_at,
+          'sort_order', a.sort_order
+        ) ORDER BY a.sort_order ASC, a.created_at DESC
+      ), '[]'::jsonb
+    )
+  ) INTO v_result
+  FROM public.advertisements a
+  WHERE a.facility_group_id = p_facility_group_id;
+
+  RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_advertisements TO authenticated;
+
+-- ===== RPC: get_active_advertisements =====
+CREATE OR REPLACE FUNCTION get_active_advertisements(p_facility_group_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_result JSONB;
+  v_now TIMESTAMPTZ;
+BEGIN
+  v_now := now();
+  SELECT jsonb_build_object(
+    'success', true,
+    'data', COALESCE(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', a.id,
+          'facility_group_id', a.facility_group_id,
+          'title', a.title,
+          'description', a.description,
+          'image_url', a.image_url,
+          'link_url', a.link_url,
+          'is_active', a.is_active,
+          'starts_at', a.starts_at,
+          'ends_at', a.ends_at,
+          'created_at', a.created_at,
+          'updated_at', a.updated_at,
+          'sort_order', a.sort_order
+        ) ORDER BY a.sort_order ASC, a.created_at DESC
+      ), '[]'::jsonb
+    )
+  ) INTO v_result
+  FROM public.advertisements a
+  WHERE a.facility_group_id = p_facility_group_id
+    AND a.is_active = true
+    AND (a.starts_at IS NULL OR a.starts_at <= v_now)
+    AND (a.ends_at IS NULL OR a.ends_at > v_now);
+
+  RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_active_advertisements TO authenticated;
+
+-- ===== RPC: get_all_active_advertisements =====
+CREATE OR REPLACE FUNCTION get_all_active_advertisements()
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_result JSONB;
+  v_now TIMESTAMPTZ;
+BEGIN
+  v_now := now();
+  SELECT jsonb_build_object(
+    'success', true,
+    'data', COALESCE(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', a.id,
+          'facility_group_id', a.facility_group_id,
+          'title', a.title,
+          'description', a.description,
+          'image_url', a.image_url,
+          'link_url', a.link_url,
+          'is_active', a.is_active,
+          'starts_at', a.starts_at,
+          'ends_at', a.ends_at,
+          'created_at', a.created_at,
+          'updated_at', a.updated_at,
+          'sort_order', a.sort_order
+        ) ORDER BY a.sort_order ASC, a.created_at DESC
+      ), '[]'::jsonb
+    )
+  ) INTO v_result
+  FROM public.advertisements a
+  WHERE a.is_active = true
+    AND (a.starts_at IS NULL OR a.starts_at <= v_now)
+    AND (a.ends_at IS NULL OR a.ends_at > v_now);
+
+  RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_all_active_advertisements TO authenticated;
+
+-- ===== RPC: admin_reschedule_booking =====
+CREATE OR REPLACE FUNCTION admin_reschedule_booking(
+  p_booking_id   UUID,
+  p_new_start_at TIMESTAMPTZ,
+  p_new_end_at   TIMESTAMPTZ
+) RETURNS JSONB
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_admin_id      UUID;
+  v_admin_role    TEXT;
+  v_admin_group   UUID;
+  v_booking       RECORD;
+  v_first         RECORD;
+  v_instance      RECORD;
+  v_facility      RECORD;
+  v_old_minutes   NUMERIC;
+  v_new_minutes   NUMERIC;
+  v_new_price     NUMERIC(10,2);
+  v_delta_start   INTERVAL;
+  v_delta_end     INTERVAL;
+  v_refund        NUMERIC(10,2) := 0;
+  v_wallet_id     UUID;
+  v_lock_key      BIGINT;
+BEGIN
+  v_admin_id := auth.uid();
+
+  SELECT raw_user_meta_data->>'role', raw_user_meta_data->>'facility_group_id'
+  INTO v_admin_role, v_admin_group::TEXT
+  FROM auth.users WHERE id = v_admin_id;
+  v_admin_group := v_admin_group::UUID;
+
+  IF v_admin_role NOT IN ('facility_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  IF p_new_end_at <= p_new_start_at THEN
+    RETURN jsonb_build_object('success', false, 'message', 'وقت النهاية يجب أن يكون بعد وقت البداية');
+  END IF;
+
+  SELECT b.*, f.group_id, f.price_per_hour, f.id AS fac_id
+  INTO v_booking
+  FROM bookings b
+  JOIN facilities f ON f.id = b.facility_id
+  WHERE b.id = p_booking_id
+  FOR UPDATE OF b;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'الحجز غير موجود');
+  END IF;
+
+  IF v_booking.status IN ('cancelled', 'completed') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'لا يمكن تعديل حجز ملغي أو منتهي');
+  END IF;
+
+  IF v_admin_role != 'super_admin' AND v_booking.group_id != v_admin_group THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح بهذا الحجز');
+  END IF;
+
+  IF NOT is_within_working_hours(v_booking.group_id, p_new_start_at, p_new_end_at) THEN
+    RETURN jsonb_build_object('success', false, 'message', 'الوقت الجديد خارج أوقات العمل');
+  END IF;
+
+  -- Get first instance to calculate delta
+  SELECT * INTO v_first
+  FROM booking_instances
+  WHERE booking_id = p_booking_id
+  ORDER BY start_at ASC
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'لا توجد تفاصيل للحجز');
+  END IF;
+
+  IF v_first.status IN ('cancelled', 'completed') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'لا يمكن تعديل حجز ملغي أو منتهي');
+  END IF;
+
+  -- Calculate shift delta
+  v_delta_start := p_new_start_at - v_first.start_at;
+  v_delta_end := p_new_end_at - v_first.end_at;
+
+  -- Check availability for ALL instances at new times (exclude current booking)
+  FOR v_instance IN
+    SELECT * FROM booking_instances
+    WHERE booking_id = p_booking_id
+    ORDER BY start_at ASC
+  LOOP
+    v_lock_key := hashtext(v_booking.fac_id::TEXT || v_instance.id::TEXT);
+    PERFORM pg_advisory_xact_lock(v_lock_key);
+
+    IF EXISTS (
+      SELECT 1 FROM booking_instances bi
+      WHERE bi.facility_id = v_booking.fac_id
+        AND bi.status IN ('confirmed', 'pending', 'pending_approval')
+        AND bi.start_at < (v_instance.end_at + v_delta_end)
+        AND bi.end_at > (v_instance.start_at + v_delta_start)
+        AND bi.booking_id != p_booking_id
+        FOR UPDATE
+    ) THEN
+      RETURN jsonb_build_object('success', false, 'message',
+        'الوقت الجديد محجوز مسبقاً: ' || (v_instance.start_at + v_delta_start)::TEXT);
+    END IF;
+  END LOOP;
+
+  -- Recalculate price proportionally (based on first instance)
+  v_old_minutes := EXTRACT(EPOCH FROM (v_first.end_at - v_first.start_at)) / 60;
+  v_new_minutes := EXTRACT(EPOCH FROM (p_new_end_at - p_new_start_at)) / 60;
+
+  -- Compute total refund: old_total - new_total across all instances
+  IF v_booking.payment_status = 'paid'
+     AND v_booking.paid_amount >= v_booking.total_price
+     AND v_booking.is_admin_booking = false
+  THEN
+    SELECT
+      COALESCE(SUM(bi.price), 0) -
+      COALESCE(SUM(ROUND((bi.price * v_new_minutes / v_old_minutes)::NUMERIC, 2)), 0)
+    INTO v_refund
+    FROM booking_instances bi
+    WHERE bi.booking_id = p_booking_id
+      AND bi.status NOT IN ('cancelled', 'completed');
+
+    IF v_refund <= 0 THEN v_refund := 0; END IF;
+    IF v_refund > 0 THEN
+      SELECT id INTO v_wallet_id
+      FROM wallets
+      WHERE user_id = v_booking.user_id
+        AND facility_group_id = v_booking.group_id;
+
+      IF FOUND THEN
+        UPDATE wallets SET balance = balance + v_refund WHERE id = v_wallet_id;
+        INSERT INTO wallet_transactions (wallet_id, amount, type, reference_type, reference_id, description, created_by)
+        VALUES (v_wallet_id, v_refund, 'refund', 'refund', p_booking_id,
+                'استرداد تعديل حجز: ' || p_booking_id::TEXT, v_admin_id);
+      END IF;
+
+      UPDATE bookings
+      SET payment_status = 'refunded',
+          updated_at = now()
+      WHERE id = p_booking_id;
+    END IF;
+  END IF;
+
+  -- Update ALL instances with shifted times + recalculated price
+  FOR v_instance IN
+    SELECT * FROM booking_instances
+    WHERE booking_id = p_booking_id
+    ORDER BY start_at ASC
+  LOOP
+    UPDATE booking_instances
+    SET start_at = v_instance.start_at + v_delta_start,
+        end_at = v_instance.end_at + v_delta_end,
+        price = ROUND((v_instance.price * v_new_minutes / v_old_minutes)::NUMERIC, 2)
+    WHERE id = v_instance.id;
+  END LOOP;
+
+  -- Update booking total_price
+  UPDATE bookings
+  SET total_price = (
+    SELECT COALESCE(SUM(price), 0)
+    FROM booking_instances
+    WHERE booking_id = p_booking_id
+  ),
+  updated_at = now()
+  WHERE id = p_booking_id;
+
+  v_new_price := ROUND((v_first.price * v_new_minutes / v_old_minutes)::NUMERIC, 2);
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم تعديل الحجز بنجاح',
+    'refund_amount', v_refund,
+    'old_price', v_first.price,
+    'new_price', v_new_price
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_reschedule_booking TO authenticated;
+
+-- ===== RPC: create_advertisement =====
+DROP FUNCTION IF EXISTS create_advertisement;
+CREATE OR REPLACE FUNCTION create_advertisement(
+  p_facility_group_id UUID,
+  p_title TEXT,
+  p_description TEXT DEFAULT NULL,
+  p_image_url TEXT DEFAULT NULL,
+  p_link_url TEXT DEFAULT NULL,
+  p_starts_at TIMESTAMPTZ DEFAULT NULL,
+  p_ends_at TIMESTAMPTZ DEFAULT NULL,
+  p_sort_order INTEGER DEFAULT 0
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_user_role TEXT;
+BEGIN
+  v_user_id := auth.uid();
+  SELECT raw_user_meta_data->>'role' INTO v_user_role FROM auth.users WHERE id = v_user_id;
+
+  IF v_user_role NOT IN ('facility_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  INSERT INTO public.advertisements (facility_group_id, title, description, image_url, link_url, starts_at, ends_at, sort_order)
+  VALUES (p_facility_group_id, p_title, p_description, p_image_url, p_link_url, p_starts_at, p_ends_at, p_sort_order);
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم إضافة الإعلان');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION create_advertisement TO authenticated;
+
+-- ===== RPC: update_advertisement =====
+DROP FUNCTION IF EXISTS update_advertisement;
+CREATE OR REPLACE FUNCTION update_advertisement(
+  p_ad_id UUID,
+  p_title TEXT,
+  p_description TEXT DEFAULT NULL,
+  p_image_url TEXT DEFAULT NULL,
+  p_link_url TEXT DEFAULT NULL,
+  p_starts_at TIMESTAMPTZ DEFAULT NULL,
+  p_ends_at TIMESTAMPTZ DEFAULT NULL,
+  p_sort_order INTEGER DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_user_role TEXT;
+BEGIN
+  v_user_id := auth.uid();
+  SELECT raw_user_meta_data->>'role' INTO v_user_role FROM auth.users WHERE id = v_user_id;
+
+  IF v_user_role NOT IN ('facility_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  UPDATE public.advertisements
+  SET title = p_title,
+      description = p_description,
+      image_url = p_image_url,
+      link_url = p_link_url,
+      starts_at = p_starts_at,
+      ends_at = p_ends_at,
+      sort_order = COALESCE(p_sort_order, sort_order),
+      updated_at = now()
+  WHERE id = p_ad_id;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم تحديث الإعلان');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION update_advertisement TO authenticated;
+
+-- ===== RPC: toggle_advertisement_active =====
+CREATE OR REPLACE FUNCTION toggle_advertisement_active(p_ad_id UUID, p_is_active BOOLEAN)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_user_role TEXT;
+BEGIN
+  v_user_id := auth.uid();
+  SELECT raw_user_meta_data->>'role' INTO v_user_role FROM auth.users WHERE id = v_user_id;
+
+  IF v_user_role NOT IN ('facility_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  UPDATE public.advertisements
+  SET is_active = p_is_active, updated_at = now()
+  WHERE id = p_ad_id;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم تغيير حالة الإعلان');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION toggle_advertisement_active TO authenticated;
+
+-- ===== RPC: update_ad_sort_order =====
+DROP FUNCTION IF EXISTS update_ad_sort_order;
+CREATE OR REPLACE FUNCTION update_ad_sort_order(p_ad_id UUID, p_sort_order INTEGER)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_user_role TEXT;
+BEGIN
+  v_user_id := auth.uid();
+  SELECT raw_user_meta_data->>'role' INTO v_user_role FROM auth.users WHERE id = v_user_id;
+
+  IF v_user_role NOT IN ('facility_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  UPDATE public.advertisements
+  SET sort_order = p_sort_order,
+      updated_at = now()
+  WHERE id = p_ad_id;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم تحديث الترتيب');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION update_ad_sort_order TO authenticated;
+
+-- ===== RPC: delete_advertisement =====
+CREATE OR REPLACE FUNCTION delete_advertisement(p_ad_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_user_role TEXT;
+BEGIN
+  v_user_id := auth.uid();
+  SELECT raw_user_meta_data->>'role' INTO v_user_role FROM auth.users WHERE id = v_user_id;
+
+  IF v_user_role NOT IN ('facility_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  DELETE FROM public.advertisements WHERE id = p_ad_id;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم حذف الإعلان');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION delete_advertisement TO authenticated;
+
+-- -------------------------------------------------------
+-- TELEGRAM NOTIFICATION ON NEW BOOKING (optional)
+-- Run this separately after enabling pg_net:
+--   create extension if not exists pg_net with schema extensions;
+-- Replace TOKEN and CHAT_ID below with your bot credentials.
+-- -------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.notify_telegram_new_booking()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, net
+AS $$
+DECLARE
+  v_token   TEXT := '8746929485:AAFHOmVFVDBrmmHE8WUcJ7xffzRZGz7NLSo';
+  v_chat_id TEXT := '8756453222';
+  v_body    JSONB;
+BEGIN
+  SELECT jsonb_build_object(
+    'chat_id', v_chat_id,
+    'text',
+      '📌 حجز جديد' || E'\n' ||
+      '━━━━━━━━━━━━' || E'\n' ||
+      '👤 ' || COALESCE(p.full_name, b.guest_name, 'زائر') || E'\n' ||
+      '📞 ' || COALESCE(p.phone, b.guest_phone, '–') || E'\n' ||
+      '🏟️ ' || f.name || ' - ' || fg.name || E'\n' ||
+      '📅 ' || to_char(NEW.start_at AT TIME ZONE 'Asia/Aden', 'YYYY-MM-dd') || E'\n' ||
+      '⏰ ' || to_char(NEW.start_at AT TIME ZONE 'Asia/Aden', 'HH12:MI') || ' ' ||
+              CASE WHEN EXTRACT(HOUR FROM NEW.start_at AT TIME ZONE 'Asia/Aden') < 12 THEN 'ص' ELSE 'م' END || ' → ' ||
+              to_char(NEW.end_at AT TIME ZONE 'Asia/Aden', 'HH12:MI') || ' ' ||
+              CASE WHEN EXTRACT(HOUR FROM NEW.end_at AT TIME ZONE 'Asia/Aden') < 12 THEN 'ص' ELSE 'م' END || E'\n' ||
+      '💰 ' || NEW.price::text || ' ر.ي' || E'\n' ||
+      '💳 مدفوع: ' || COALESCE(b.paid_amount, 0)::text || ' ر.ي' || E'\n' ||
+      '📋 ' || CASE b.is_admin_booking WHEN true THEN 'دفع خارج التطبيق' ELSE b.payment_status END || E'\n' ||
+      '📋 ' || CASE b.is_recurring WHEN true THEN 'متكرر' ELSE 'مرة واحدة' END
+  ) INTO v_body
+  FROM bookings b
+  JOIN facilities f ON f.id = b.facility_id
+  JOIN facility_groups fg ON fg.id = f.group_id
+  LEFT JOIN profiles p ON p.id = b.user_id
+  WHERE b.id = NEW.booking_id;
+
+  BEGIN
+    PERFORM net.http_post(
+      url := 'https://api.telegram.org/bot' || v_token || '/sendMessage',
+      headers := jsonb_build_object('Content-Type', 'application/json'),
+      body := v_body
+    );
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_booking_instance_telegram ON booking_instances;
+CREATE TRIGGER trg_booking_instance_telegram
+  AFTER INSERT ON booking_instances
+  FOR EACH ROW
+  EXECUTE FUNCTION public.notify_telegram_new_booking();
+
+-- ===== RPC: get_facility_analytics =====
+DROP FUNCTION IF EXISTS get_facility_analytics;
+CREATE OR REPLACE FUNCTION get_facility_analytics(
+  p_facility_group_id UUID,
+  p_start_date DATE,
+  p_end_date DATE
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_result JSONB;
+  v_days INTEGER;
+  v_open INT;
+  v_close INT;
+  v_hours_per_day INT;
+BEGIN
+  v_days := (p_end_date - p_start_date) + 1;
+
+  SELECT EXTRACT(HOUR FROM opening_time)::INT,
+         EXTRACT(HOUR FROM closing_time_mon)::INT
+  INTO v_open, v_close
+  FROM group_settings
+  WHERE facility_group_id = p_facility_group_id;
+
+  v_hours_per_day := v_close - v_open;
+
+  WITH facility_list AS (
+    SELECT id, name FROM facilities WHERE group_id = p_facility_group_id
+  ),
+  booked AS (
+    SELECT f.id AS facility_id,
+           COALESCE(SUM(EXTRACT(EPOCH FROM (bi.end_at - bi.start_at)) / 3600), 0) AS total_hours
+    FROM facility_list f
+    LEFT JOIN booking_instances bi ON bi.facility_id = f.id
+      AND bi.start_at::date >= p_start_date
+      AND bi.end_at::date <= p_end_date
+      AND (bi.status IS NULL OR bi.status NOT IN ('cancelled'))
+    GROUP BY f.id
+  ),
+  peak AS (
+    SELECT EXTRACT(HOUR FROM bi.start_at AT TIME ZONE 'Asia/Aden')::INT AS hour24,
+           COUNT(*)::INT AS booking_count
+    FROM booking_instances bi
+    JOIN bookings b ON b.id = bi.booking_id
+    WHERE b.facility_group_id = p_facility_group_id
+      AND bi.start_at::date >= p_start_date
+      AND bi.end_at::date <= p_end_date
+      AND (bi.status IS NULL OR bi.status NOT IN ('cancelled'))
+    GROUP BY hour24
+    ORDER BY hour24
+  )
+  SELECT jsonb_build_object(
+    'success', true,
+    'data', jsonb_build_object(
+      'facilities', COALESCE(
+        (SELECT jsonb_agg(jsonb_build_object(
+          'facility_id', fl.id,
+          'facility_name', fl.name,
+          'booked_hours', ROUND(b.total_hours::NUMERIC, 1),
+          'available_hours', v_days * v_hours_per_day,
+          'utilization_percent', CASE
+            WHEN v_days * v_hours_per_day > 0
+            THEN ROUND((b.total_hours / (v_days * v_hours_per_day) * 100)::NUMERIC, 1)
+            ELSE 0 END
+        ) ORDER BY fl.name) FROM facility_list fl LEFT JOIN booked b ON b.facility_id = fl.id),
+        '[]'::jsonb
+      ),
+      'peak_hours', COALESCE(
+        (SELECT jsonb_agg(jsonb_build_object(
+          'hour', p.hour24,
+          'booking_count', p.booking_count
+        ) ORDER BY p.hour24) FROM peak p),
+        '[]'::jsonb
+      ),
+      'summary', jsonb_build_object(
+        'total_booked_hours', (SELECT COALESCE(SUM(total_hours), 0) FROM booked),
+        'total_available_hours', (SELECT v_days * COUNT(*) * v_hours_per_day FROM facilities WHERE group_id = p_facility_group_id),
+        'overall_utilization', ROUND((
+          SELECT CASE
+            WHEN v_days * COUNT(*) * v_hours_per_day > 0
+            THEN (COALESCE(SUM(b.total_hours), 0) / (v_days * COUNT(*) * v_hours_per_day) * 100)::NUMERIC
+            ELSE 0 END
+          FROM booked b
+        ), 1)
+      )
+    )
+  ) INTO v_result;
+
+  RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_facility_analytics TO authenticated;

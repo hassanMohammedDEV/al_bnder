@@ -84,6 +84,9 @@ class _AnnouncementCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final isUnread = !announcement.isRead;
+    final auth = ref.watch(authStateProvider);
+    final isAdmin = auth.role == 'facility_admin' || auth.role == 'super_admin';
+    final isSender = announcement.senderId == auth.userId;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -94,7 +97,7 @@ class _AnnouncementCard extends ConsumerWidget {
           if (isUnread) {
             ref.read(announcementActionProvider.notifier).markRead([announcement.id]);
           }
-          _showDetail(context, announcement);
+          _showDetail(context, announcement, ref);
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -127,6 +130,19 @@ class _AnnouncementCard extends ConsumerWidget {
                     _formatDate(announcement.createdAt),
                     style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                   ),
+                  if (isAdmin || isSender) ...[
+                    const SizedBox(width: 4),
+                    PopupMenuButton<String>(
+                      padding: EdgeInsets.zero,
+                      iconSize: 20,
+                      onSelected: (v) {
+                        if (v == 'delete') _confirmDelete(context, ref);
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(value: 'delete', child: Text('حذف')),
+                      ],
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 8),
@@ -148,7 +164,28 @@ class _AnnouncementCard extends ConsumerWidget {
     );
   }
 
-  void _showDetail(BuildContext context, Announcement a) {
+  void _confirmDelete(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف الإشعار'),
+        content: const Text('هل أنت متأكد من حذف هذا الإشعار؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(announcementActionProvider.notifier).deleteAnnouncement(announcement.id);
+            },
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDetail(BuildContext context, Announcement a, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),

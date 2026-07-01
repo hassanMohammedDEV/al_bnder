@@ -19,6 +19,7 @@ import '../../features/admin/presentaion/screens/admin_dashboard_screen.dart';
 import '../../features/admin/presentaion/screens/pending_bookings_screen.dart';
 import '../../features/admin/presentaion/screens/manage_facilities_screen.dart';
 import '../../features/admin/presentaion/screens/manage_ads_screen.dart';
+import '../../features/admin/presentaion/screens/create_edit_ad_screen.dart';
 import '../../features/admin/presentaion/screens/deposit_screen.dart';
 import '../../features/admin/presentaion/screens/scan_qr_screen.dart';
 import '../../features/admin/presentaion/screens/group_settings_screen.dart';
@@ -26,6 +27,7 @@ import '../../features/admin/presentaion/screens/admin_today_bookings_screen.dar
 import '../../features/admin/presentaion/screens/admin_user_wallet_screen.dart';
 import '../../features/admin/presentaion/screens/admin_search_bookings_screen.dart';
 import '../../features/reports/presentaion/screens/reports_screen.dart';
+import '../../features/ads/models/facility_ad.dart';
 import '../../features/announcements/presentaion/screens/announcements_screen.dart';
 import '../../features/announcements/presentaion/screens/create_announcement_screen.dart';
 import '../../features/availability/presentaion/screens/available_slots_screen.dart';
@@ -91,6 +93,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/admin/ads',
         pageBuilder: (_, __) => const CupertinoPage(child: ManageAdsScreen()),
+      ),
+      GoRoute(
+        path: '/admin/ads/create',
+        pageBuilder: (_, state) {
+          final extra = state.extra;
+          if (extra is Map<String, dynamic>) {
+            return CupertinoPage(
+              child: CreateEditAdScreen(
+                facilityGroupId: extra['facilityGroupId'] as String,
+                ad: extra['ad'] as FacilityAd?,
+              ),
+            );
+          }
+          return CupertinoPage(
+            child: CreateEditAdScreen(
+              facilityGroupId: extra as String,
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '/admin/deposit',

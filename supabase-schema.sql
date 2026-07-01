@@ -32,8 +32,9 @@ CREATE TABLE facilities (
   images          TEXT[],
   price_per_hour  DECIMAL(10,2) NOT NULL CHECK (price_per_hour > 0),
   is_active       BOOLEAN DEFAULT true,
-  created_at      TIMESTAMPTZ DEFAULT now(),
-  updated_at      TIMESTAMPTZ DEFAULT now()
+  created_at        TIMESTAMPTZ DEFAULT now(),
+  updated_at        TIMESTAMPTZ DEFAULT now(),
+  sort_order        INTEGER DEFAULT 0
 );
 
 -- 2.3 User Profiles (extends auth.users)

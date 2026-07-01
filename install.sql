@@ -144,8 +144,9 @@ CREATE TABLE offers (
   is_active           BOOLEAN DEFAULT true,
   valid_from          DATE,
   valid_until         DATE,
-  created_at          TIMESTAMPTZ DEFAULT now(),
-  updated_at          TIMESTAMPTZ DEFAULT now()
+  created_at        TIMESTAMPTZ DEFAULT now(),
+  updated_at        TIMESTAMPTZ DEFAULT now(),
+  sort_order        INTEGER DEFAULT 0
 );
 
 CREATE TABLE otp_codes (
