@@ -21,6 +21,14 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _tabIndex = 0;
+  final _visitedTabs = <int>{0};
+
+  void _selectTab(int i) {
+    setState(() {
+      _tabIndex = i;
+      _visitedTabs.add(i);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +39,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (role == 'facility_viewer') return _buildViewerShell();
     return _buildUserShell();
   }
+
+  Widget _tab(int index, Widget child) =>
+    _visitedTabs.contains(index) ? child : const SizedBox.shrink();
 
   Widget _bellBadge() {
     final count = ref.watch(unreadCountProvider);
@@ -69,18 +80,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: [_bellBadge()],
       ),
       body: SafeArea(
-        child: Stack(
+        child: IndexedStack(
+          index: _tabIndex,
           children: [
-            Offstage(offstage: _tabIndex != 0, child: const HomeTab()),
-            Offstage(offstage: _tabIndex != 1, child: const MyBookingsScreen(inShell: true)),
-            Offstage(offstage: _tabIndex != 2, child: const WalletScreen(inShell: true)),
-            Offstage(offstage: _tabIndex != 3, child: SettingsScreen(inShell: true)),
+            const HomeTab(),
+            _tab(1, const MyBookingsScreen(inShell: true)),
+            _tab(2, const WalletScreen(inShell: true)),
+            _tab(3, SettingsScreen(inShell: true)),
           ],
         ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
-        onDestinationSelected: (i) => setState(() => _tabIndex = i),
+        onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'الرئيسية'),
           NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month), label: 'حجوزاتي'),
@@ -98,16 +110,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: [_bellBadge()],
       ),
       body: SafeArea(
-        child: Stack(
+        child: IndexedStack(
+          index: _tabIndex,
           children: [
-            Offstage(offstage: _tabIndex != 0, child: const ReportsScreen(inShell: true)),
-            Offstage(offstage: _tabIndex != 1, child: SettingsScreen(inShell: true)),
+            const ReportsScreen(inShell: true),
+            _tab(1, SettingsScreen(inShell: true)),
           ],
         ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
-        onDestinationSelected: (i) => setState(() => _tabIndex = i),
+        onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'التقارير'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'المزيد'),
@@ -123,18 +136,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: [_bellBadge()],
       ),
       body: SafeArea(
-        child: Stack(
+        child: IndexedStack(
+          index: _tabIndex,
           children: [
-            Offstage(offstage: _tabIndex != 0, child: const AdminDashboardScreen(inShell: true)),
-            Offstage(offstage: _tabIndex != 1, child: const PendingBookingsScreen(inShell: true)),
-            Offstage(offstage: _tabIndex != 2, child: const ReportsScreen(inShell: true)),
-            Offstage(offstage: _tabIndex != 3, child: SettingsScreen(inShell: true)),
+            const AdminDashboardScreen(inShell: true),
+            _tab(1, const PendingBookingsScreen(inShell: true)),
+            _tab(2, const ReportsScreen(inShell: true)),
+            _tab(3, SettingsScreen(inShell: true)),
           ],
         ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
-        onDestinationSelected: (i) => setState(() => _tabIndex = i),
+        onDestinationSelected: _selectTab,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'لوحة التحكم'),
           NavigationDestination(icon: Icon(Icons.pending_actions_outlined), selectedIcon: Icon(Icons.pending_actions), label: 'الحجوزات'),

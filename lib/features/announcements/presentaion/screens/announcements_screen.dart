@@ -55,8 +55,9 @@ class AnnouncementsScreen extends ConsumerWidget {
         ),
       );
     } else {
+      final bottomInset = MediaQuery.of(context).padding.bottom;
       content = ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
         itemCount: state.data!.length,
         itemBuilder: (_, i) => _AnnouncementCard(announcement: state.data![i]),
       );

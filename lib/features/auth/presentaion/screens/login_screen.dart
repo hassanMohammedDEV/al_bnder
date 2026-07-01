@@ -19,6 +19,7 @@ class LoginScreen extends ConsumerWidget {
     final action = ref.watch(authActionProvider);
 
     Future<void> login() async {
+      FocusScope.of(context).unfocus();
       ref.read(authValidationProvider.notifier)
           .validateStep([AuthFields.phone, AuthFields.password]);
       if (!ref.read(authValidationProvider).isValid) return;
@@ -60,7 +61,7 @@ class LoginScreen extends ConsumerWidget {
               const SizedBox(height: 48),
               AppTextField(
                 label: 'رقم الجوال',
-                hint: '05xxxxxxxx',
+                hint: '7xxxxxxxx',
                 error: validation.field(AuthFields.phone).error,
                 onChanged: (v) {
                   ref.read(authStateProvider.notifier).updatePhone(v);

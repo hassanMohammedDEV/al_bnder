@@ -8,6 +8,7 @@ import '../models/booking.dart';
 import '../models/booking_state.dart';
 import '../repositories/booking_repository_impl.dart';
 import '../../wallet/providers/wallet_provider.dart';
+import '../../facilities/providers/selected_group_provider.dart';
 
 final myBookingsProvider = NotifierProvider<MyBookingsNotifier, BaseState<List<Booking>>>(
   MyBookingsNotifier.new,
@@ -26,8 +27,12 @@ class MyBookingsNotifier extends BaseNotifier<List<Booking>> {
 
   @override
   BaseState<List<Booking>> build() {
-    Future.microtask(() => load());
-    return const BaseState();
+    final selected = ref.read(selectedGroupProvider);
+    if (selected != null) {
+      _currentGroupId = selected;
+      Future.microtask(() => load());
+    }
+    return const BaseState(status: LoadStatus.loading);
   }
 
   void setGroupId(String? groupId) {

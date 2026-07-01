@@ -19,6 +19,7 @@ class RegisterScreen extends ConsumerWidget {
     final action = ref.watch(authActionProvider);
 
     Future<void> register() async {
+      FocusScope.of(context).unfocus();
       ref.read(authValidationProvider.notifier).validateAll();
       if (!ref.read(authValidationProvider).isValid) return;
 
@@ -72,7 +73,7 @@ class RegisterScreen extends ConsumerWidget {
               const SizedBox(height: 20),
               AppTextField(
                 label: 'رقم الجوال',
-                hint: '05xxxxxxxx',
+                hint: '7xxxxxxxx',
                 error: validation.field(AuthFields.phone).error,
                 onChanged: (v) {
                   ref.read(authStateProvider.notifier).updatePhone(v);

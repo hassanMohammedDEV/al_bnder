@@ -32,6 +32,9 @@ import '../../features/announcements/presentaion/screens/announcements_screen.da
 import '../../features/announcements/presentaion/screens/create_announcement_screen.dart';
 import '../../features/availability/presentaion/screens/available_slots_screen.dart';
 import '../../features/settings/presentaion/screens/settings_screen.dart';
+import '../../features/player_ads/presentaion/screens/player_ads_screen.dart';
+import '../../features/player_ads/presentaion/screens/create_player_ad_screen.dart';
+import '../../features/player_ads/presentaion/screens/reported_ads_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
@@ -162,6 +165,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/announcements', pageBuilder: (_, __) => const CupertinoPage(child: AnnouncementsScreen())),
       GoRoute(path: '/available-slots', pageBuilder: (_, __) => const CupertinoPage(child: AvailableSlotsScreen())),
       GoRoute(path: '/admin/create-announcement', pageBuilder: (_, __) => const CupertinoPage(child: CreateAnnouncementScreen())),
+      GoRoute(path: '/player-ads', pageBuilder: (_, __) => const CupertinoPage(child: PlayerAdsScreen())),
+      GoRoute(path: '/create-player-ad', pageBuilder: (_, __) => const CupertinoPage(child: CreatePlayerAdScreen())),
+      GoRoute(path: '/admin/reported-ads', pageBuilder: (_, __) => const CupertinoPage(child: ReportedAdsScreen())),
     ],
   );
 

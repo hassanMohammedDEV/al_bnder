@@ -141,6 +141,13 @@ class AdminDashboardScreen extends ConsumerWidget {
           onTap: () => context.push('/admin/ads'),
         ),
         _MenuItem(
+          icon: Icons.flag_outlined,
+          title: 'البلاغات',
+          subtitle: 'إعلانات اللاعبين المبلغ عنها',
+          color: Colors.red,
+          onTap: () => context.push('/admin/reported-ads'),
+        ),
+        _MenuItem(
           icon: Icons.search,
           title: 'بحث بالجوال',
           subtitle: 'البحث في الحجوزات برقم الجوال',

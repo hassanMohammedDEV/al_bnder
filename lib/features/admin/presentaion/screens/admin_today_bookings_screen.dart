@@ -166,7 +166,7 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
                       Expanded(
                         child: OutlinedButton.icon(
                           icon: const Icon(Icons.cancel_outlined, size: 18),
-                          label: const Text('إلغاء'),
+                          label: Text('إلغاء', maxLines: 1, overflow: TextOverflow.ellipsis),
                           style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
                           onPressed: () => _cancelBooking(context, id),
                         ),
@@ -175,7 +175,7 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
                       Expanded(
                         child: OutlinedButton.icon(
                           icon: const Icon(Icons.compress, size: 18),
-                          label: const Text('تقليص'),
+                          label: Text('تقليص', maxLines: 1, overflow: TextOverflow.ellipsis),
                           onPressed: () => _shrinkBooking(context, b, instances),
                         ),
                       ),
@@ -183,7 +183,7 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
                       Expanded(
                         child: OutlinedButton.icon(
                           icon: const Icon(Icons.swap_horiz, size: 18),
-                          label: const Text('نقل'),
+                          label: Text('نقل', maxLines: 1, overflow: TextOverflow.ellipsis),
                           onPressed: () => _rescheduleBooking(context, b, instances),
                         ),
                       ),

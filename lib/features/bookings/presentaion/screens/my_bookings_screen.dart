@@ -21,15 +21,6 @@ class MyBookingsScreen extends ConsumerStatefulWidget {
 class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
   String? _statusFilter;
 
-  @override
-  void initState() {
-    super.initState();
-    final selected = ref.read(selectedGroupProvider);
-    if (selected != null) {
-      ref.read(myBookingsProvider.notifier).setGroupId(selected);
-    }
-  }
-
   void _setStatus(String? status) {
     setState(() => _statusFilter = status);
     ref.read(myBookingsProvider.notifier).load(status: status);

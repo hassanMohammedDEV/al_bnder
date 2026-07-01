@@ -16,15 +16,17 @@ class AdBanner extends ConsumerStatefulWidget {
   ConsumerState<AdBanner> createState() => _AdBannerState();
 }
 
-class _AdBannerState extends ConsumerState<AdBanner> {
+class _AdBannerState extends ConsumerState<AdBanner> with WidgetsBindingObserver {
   final _pageCtrl = PageController();
   Timer? _timer;
   int _currentPage = 0;
   int _lastTotal = 0;
+  int _foregroundKey = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.invalidate(activeAdsProvider);
     });
@@ -32,9 +34,22 @@ class _AdBannerState extends ConsumerState<AdBanner> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _pageCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _timer?.cancel();
+      _lastTotal = 0;
+      _foregroundKey++;
+      _currentPage = 0;
+      _pageCtrl.jumpToPage(0);
+      setState(() {});
+    }
   }
 
   void _startAutoScroll(int total) {
@@ -69,7 +84,7 @@ class _AdBannerState extends ConsumerState<AdBanner> {
                   controller: _pageCtrl,
                   itemCount: total,
                   onPageChanged: (i) => setState(() => _currentPage = i),
-                  itemBuilder: (_, i) => _AdCard(ad: ads[i]),
+                  itemBuilder: (_, i) => _AdCard(ad: ads[i], key: ValueKey('${ads[i].id}-$_foregroundKey')),
                 ),
               ),
               if (total > 1)
@@ -164,7 +179,7 @@ final _colors = [
 
 class _AdCard extends StatelessWidget {
   final FacilityAd ad;
-  const _AdCard({required this.ad});
+  const _AdCard({super.key, required this.ad});
 
   void _openLink(BuildContext context) {
     if (ad.linkUrl == null || ad.linkUrl!.isEmpty) return;

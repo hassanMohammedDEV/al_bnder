@@ -88,6 +88,11 @@ class _HomeTabState extends ConsumerState<HomeTab> {
         // Ad banner
         const AdBanner(),
 
+        const SizedBox(height: 12),
+
+        // Player ads entry
+        _PlayerAdsEntry(),
+
         // Facilities section (only for active groups)
         if (selectedGroup != null && selectedGroup.isActive) ...[
           const SizedBox(height: 16),
@@ -109,6 +114,52 @@ class _HomeTabState extends ConsumerState<HomeTab> {
       ],
       ),
     ),
+    );
+  }
+}
+
+class _PlayerAdsEntry extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: () => context.push('/player-ads'),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.people, color: Colors.green, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('إعلانات اللاعبين', style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600, color: scheme.onSurface,
+                    )),
+                    const SizedBox(height: 2),
+                    Text('ابحث عن فريق أو انشر إعلاناً', style: TextStyle(
+                      fontSize: 13, color: scheme.onSurfaceVariant,
+                    )),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant, size: 16),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

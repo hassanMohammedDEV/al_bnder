@@ -318,7 +318,7 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
                     style: FilledButton.styleFrom(backgroundColor: Colors.green),
                     child: action.isLoading('confirm')
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('تأكيد', style: TextStyle(color: Colors.white)),
+                        : Text('تأكيد', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white)),
                   ),
                 ),
                 if (booking['user_id'] != null) ...[
@@ -330,7 +330,7 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
                         groupId: booking['group_id'] as String,
                         userName: booking['user_name'] as String? ?? '',
                       ),
-                      child: const Text('شحن المحفظة'),
+                      child: const Text('شحن المحفظة', maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
                   ),
                 ],
@@ -338,7 +338,7 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.cancel_outlined, size: 18),
-                    label: const Text('إلغاء'),
+                    label: Text('إلغاء', maxLines: 1, overflow: TextOverflow.ellipsis),
                     style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
                     onPressed: isProcessing ? null : () => _cancelBooking(context, id),
                   ),
