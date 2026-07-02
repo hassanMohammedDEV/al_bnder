@@ -10,6 +10,9 @@ class GroupSettings {
   final String closingTimeSat;
   final double depositAmount;
   final int contractExpiryHours;
+  final double maxBookingHours;
+  final String slotFineFrom;
+  final String slotFineTo;
 
   const GroupSettings({
     required this.facilityGroupId,
@@ -23,6 +26,9 @@ class GroupSettings {
     required this.closingTimeSat,
     required this.depositAmount,
     required this.contractExpiryHours,
+    required this.maxBookingHours,
+    required this.slotFineFrom,
+    required this.slotFineTo,
   });
 
   factory GroupSettings.fromJson(Map<String, dynamic> json) => GroupSettings(
@@ -37,5 +43,8 @@ class GroupSettings {
     closingTimeSat: json['closing_time_sat'] as String? ?? '22:00',
     depositAmount: (json['deposit_amount'] as num?)?.toDouble() ?? 5000,
     contractExpiryHours: (json['contract_expiry_hours'] as num?)?.toInt() ?? 8,
+    maxBookingHours: (json['max_booking_hours'] as num?)?.toDouble() ?? 3.0,
+    slotFineFrom: json['slot_fine_from'] as String? ?? '16:00',
+    slotFineTo: json['slot_fine_to'] as String? ?? '20:00',
   );
 }

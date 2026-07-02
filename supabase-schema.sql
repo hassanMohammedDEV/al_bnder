@@ -184,6 +184,7 @@ CREATE TABLE group_settings (
   closing_time_sat   TIME NOT NULL DEFAULT '22:00',
   deposit_amount     DECIMAL(10,2) NOT NULL DEFAULT 5000,
   contract_expiry_hours INT NOT NULL DEFAULT 8,
+  max_booking_hours  DECIMAL(3,1) NOT NULL DEFAULT 3.0,
   updated_at         TIMESTAMPTZ DEFAULT now(),
   updated_by         UUID REFERENCES profiles(id) ON DELETE SET NULL
 );

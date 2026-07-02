@@ -194,6 +194,9 @@ class AdminRepositoryImpl implements AdminRepository {
     required String closingTimeSat,
     required double depositAmount,
     required int contractExpiryHours,
+    required double maxBookingHours,
+    String slotFineFrom = '16:00',
+    String slotFineTo = '20:00',
   }) {
     return _apiClient.post('rpc/upsert_group_settings', body: {
       'p_facility_group_id': facilityGroupId,
@@ -207,6 +210,9 @@ class AdminRepositoryImpl implements AdminRepository {
       'p_closing_time_sat': closingTimeSat,
       'p_deposit_amount': depositAmount,
       'p_contract_expiry_hours': contractExpiryHours,
+      'p_max_booking_hours': maxBookingHours,
+      'p_slot_fine_from': slotFineFrom,
+      'p_slot_fine_to': slotFineTo,
     }, parser: (_) {});
   }
 

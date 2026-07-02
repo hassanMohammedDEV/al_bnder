@@ -235,57 +235,48 @@ class _PlayerAdCard extends ConsumerWidget {
     final isCreator = ad.creatorId == ref.read(authStateProvider).userId;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isLooking ? Colors.green.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isLooking ? Icons.person_search : Icons.group_add,
-                        size: 14,
-                        color: isLooking ? Colors.green : Colors.orange,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        isLooking ? 'أبحث عن فريق' : 'ناقصنا لاعبين',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isLooking ? Colors.green : Colors.orange,
-                        ),
-                      ),
-                    ],
+                Icon(
+                  isLooking ? Icons.person_search : Icons.group_add,
+                  size: 18,
+                  color: isLooking ? Colors.green : Colors.orange,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isLooking ? 'أبحث عن فريق' : 'ناقصنا لاعبين',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isLooking ? Colors.green : Colors.orange,
+                    ),
                   ),
                 ),
-                if (!isLooking) ...[
-                  const SizedBox(width: 8),
+                if (!isLooking && ad.playersNeeded != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: scheme.primaryContainer.withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '${ad.playersNeeded ?? 0} لاعبين',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.primary),
+                      '${ad.playersNeeded}',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: scheme.primary),
                     ),
                   ),
-                ],
+                const SizedBox(width: 8),
+                Text(_timeAgo(ad.createdAt), style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             if (isLooking) ...[
               if (ad.days.isNotEmpty)
                 _InfoRow(icon: Icons.calendar_today, text: ad.days.map(_dayName).join(' - ')),
@@ -305,71 +296,24 @@ class _PlayerAdCard extends ConsumerWidget {
             ],
             if (ad.notes != null && ad.notes!.isNotEmpty) ...[
               const SizedBox(height: 4),
-              Text(ad.notes!, style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
+              Text(ad.notes!, style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
             ],
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(_timeAgo(ad.createdAt), style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant.withValues(alpha: 0.6))),
-            ),
-            const Divider(height: 16),
-            Row(
-              children: [
-                Icon(Icons.person, size: 16, color: scheme.onSurfaceVariant),
-                const SizedBox(width: 6),
-                Text(isCreator ? 'إعلاني' : ad.creatorName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurface)),
-                const Spacer(),
-                if (!isCreator) ...[
-                  Text(ad.creatorPhone, style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant), textDirection: TextDirection.ltr),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {
-                      final url = 'https://wa.me/${ad.creatorPhone.replaceAll('+', '')}';
-                      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF25D366),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.phone, size: 14, color: Colors.white),
-                          SizedBox(width: 4),
-                          Text('واتساب', style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
             const SizedBox(height: 8),
             Row(
               children: [
+                Icon(Icons.person, size: 14, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Expanded(child: Text(isCreator ? 'إعلاني' : ad.creatorName, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: scheme.onSurface))),
                 if (isCreator) ...[
-                  TextButton.icon(
-                    onPressed: () => _editAd(context, ref),
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('تعديل', style: TextStyle(fontSize: 13)),
-                    style: TextButton.styleFrom(foregroundColor: scheme.primary, padding: const EdgeInsets.symmetric(horizontal: 8)),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => _confirmDelete(context, ref),
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    label: const Text('حذف', style: TextStyle(fontSize: 13)),
-                    style: TextButton.styleFrom(foregroundColor: scheme.error, padding: const EdgeInsets.symmetric(horizontal: 8)),
-                  ),
+                  _ActionBtn(icon: Icons.edit_outlined, color: scheme.primary, onTap: () => _editAd(context, ref)),
+                  const SizedBox(width: 4),
+                  _ActionBtn(icon: Icons.delete_outline, color: scheme.error, onTap: () => _confirmDelete(context, ref)),
                 ],
-                const Spacer(),
-                if (!isCreator)
-                  TextButton.icon(
-                    onPressed: () => _reportAd(context, ref),
-                    icon: const Icon(Icons.flag_outlined, size: 16),
-                    label: const Text('إبلاغ', style: TextStyle(fontSize: 13)),
-                    style: TextButton.styleFrom(foregroundColor: scheme.onSurfaceVariant, padding: const EdgeInsets.symmetric(horizontal: 8)),
-                  ),
+                if (!isCreator) ...[
+                  _ActionBtn(icon: Icons.flag_outlined, color: scheme.onSurfaceVariant, onTap: () => _reportAd(context, ref)),
+                  const SizedBox(width: 6),
+                  _WhatsAppBtn(phone: ad.creatorPhone),
+                ],
               ],
             ),
           ],
@@ -509,6 +453,60 @@ class _PlayerAdCard extends ConsumerWidget {
             child: const Text('إبلاغ'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ActionBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  const _ActionBtn({required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, size: 16, color: color),
+      ),
+    );
+  }
+}
+
+class _WhatsAppBtn extends StatelessWidget {
+  final String phone;
+  const _WhatsAppBtn({required this.phone});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        final url = 'https://wa.me/${phone.replaceAll('+', '')}';
+        launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF25D366),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.phone, size: 14, color: Colors.white),
+            SizedBox(width: 4),
+            Text('واتساب', style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+          ],
+        ),
       ),
     );
   }

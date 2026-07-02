@@ -1800,8 +1800,26 @@ DECLARE
   v_open    TIME;
   v_close   TIME;
 BEGIN
-  SELECT opening_time,
-    CASE EXTRACT(DOW FROM p_start_at)
+  -- Get the opening time first
+  SELECT opening_time INTO v_open
+  FROM group_settings
+  WHERE facility_group_id = p_facility_group_id;
+
+  IF v_open IS NULL THEN
+    RETURN true;
+  END IF;
+
+  -- Determine the "session date": if start is before the opening time
+  -- (after midnight in a cross-midnight schedule), the session started
+  -- on the previous day, so use the previous day's closing time.
+  IF p_start_at::TIME < v_open THEN
+    v_dow = EXTRACT(DOW FROM p_start_at - INTERVAL '1 day');
+  ELSE
+    v_dow = EXTRACT(DOW FROM p_start_at);
+  END IF;
+
+  SELECT
+    CASE v_dow
       WHEN 0 THEN closing_time_sun
       WHEN 1 THEN closing_time_mon
       WHEN 2 THEN closing_time_tue
@@ -1809,22 +1827,26 @@ BEGIN
       WHEN 4 THEN closing_time_thu
       WHEN 5 THEN closing_time_fri
       WHEN 6 THEN closing_time_sat
-    END INTO v_open, v_close
+    END INTO v_close
   FROM group_settings
   WHERE facility_group_id = p_facility_group_id;
-
-  IF v_open IS NULL THEN
-    RETURN true; -- no settings configured
-  END IF;
 
   IF v_close > v_open THEN
     -- same-day window
     RETURN p_start_at::TIME >= v_open AND p_end_at::TIME <= v_close
        AND p_end_at::DATE = p_start_at::DATE;
   ELSE
-    -- crosses midnight (e.g., 16:00 → 02:00)
-    RETURN p_start_at::TIME >= v_open
-       AND (p_end_at::TIME <= v_close OR p_end_at::DATE > p_start_at::DATE);
+    -- crosses midnight (e.g., 17:00 → 02:00)
+    IF p_start_at::TIME >= v_open THEN
+      -- started in the evening
+      RETURN p_end_at::DATE = p_start_at::DATE  -- same day (before midnight) → always valid
+          OR (p_end_at::DATE > p_start_at::DATE AND p_end_at::TIME <= v_close);  -- next day → must be ≤ close
+    ELSE
+      -- started after midnight (early morning of the next day)
+      RETURN p_start_at::TIME <= v_close
+         AND p_end_at::TIME <= v_close
+         AND p_end_at::DATE = p_start_at::DATE;
+    END IF;
   END IF;
 END;
 $$;
@@ -1857,7 +1879,10 @@ BEGIN
     'closing_time_fri', gs.closing_time_fri,
     'closing_time_sat', gs.closing_time_sat,
     'deposit_amount', gs.deposit_amount,
-    'contract_expiry_hours', gs.contract_expiry_hours
+    'contract_expiry_hours', gs.contract_expiry_hours,
+    'max_booking_hours', gs.max_booking_hours,
+    'slot_fine_from', gs.slot_fine_from,
+    'slot_fine_to', gs.slot_fine_to
   ) INTO v_settings
   FROM group_settings gs
   WHERE gs.facility_group_id = p_facility_group_id;
@@ -1874,7 +1899,10 @@ BEGIN
       'closing_time_fri', '22:00',
       'closing_time_sat', '22:00',
       'deposit_amount', 5000,
-      'contract_expiry_hours', 8
+      'contract_expiry_hours', 8,
+      'max_booking_hours', 3.0,
+      'slot_fine_from', '16:00',
+      'slot_fine_to', '20:00'
     );
   END IF;
 
@@ -1902,7 +1930,10 @@ CREATE OR REPLACE FUNCTION upsert_group_settings(
   p_closing_time_fri   TEXT,
   p_closing_time_sat   TEXT,
   p_deposit_amount     DECIMAL(10,2),
-  p_contract_expiry_hours INT
+  p_contract_expiry_hours INT,
+  p_max_booking_hours  DECIMAL(3,1) DEFAULT 3.0,
+  p_slot_fine_from     TEXT DEFAULT '16:00',
+  p_slot_fine_to       TEXT DEFAULT '20:00'
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -1928,10 +1959,11 @@ BEGIN
 
   INSERT INTO group_settings (facility_group_id, opening_time, closing_time_sun, closing_time_mon,
     closing_time_tue, closing_time_wed, closing_time_thu, closing_time_fri, closing_time_sat,
-    deposit_amount, contract_expiry_hours, updated_by)
+    deposit_amount, contract_expiry_hours, max_booking_hours, slot_fine_from, slot_fine_to, updated_by)
   VALUES (p_facility_group_id, p_opening_time::TIME, p_closing_time_sun::TIME, p_closing_time_mon::TIME,
     p_closing_time_tue::TIME, p_closing_time_wed::TIME, p_closing_time_thu::TIME, p_closing_time_fri::TIME,
-    p_closing_time_sat::TIME, p_deposit_amount, p_contract_expiry_hours, v_admin_id)
+    p_closing_time_sat::TIME, p_deposit_amount, p_contract_expiry_hours, p_max_booking_hours,
+    p_slot_fine_from::TIME, p_slot_fine_to::TIME, v_admin_id)
   ON CONFLICT (facility_group_id) DO UPDATE SET
     opening_time = EXCLUDED.opening_time,
     closing_time_sun = EXCLUDED.closing_time_sun,
@@ -1943,6 +1975,9 @@ BEGIN
     closing_time_sat = EXCLUDED.closing_time_sat,
     deposit_amount = EXCLUDED.deposit_amount,
     contract_expiry_hours = EXCLUDED.contract_expiry_hours,
+    max_booking_hours = EXCLUDED.max_booking_hours,
+    slot_fine_from = EXCLUDED.slot_fine_from,
+    slot_fine_to = EXCLUDED.slot_fine_to,
     updated_at = now(),
     updated_by = v_admin_id;
 

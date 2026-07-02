@@ -57,6 +57,9 @@ abstract class AdminRepository {
     required String closingTimeSat,
     required double depositAmount,
     required int contractExpiryHours,
+    required double maxBookingHours,
+    String slotFineFrom = '16:00',
+    String slotFineTo = '20:00',
   });
   Future<Result<void>> autoCancelExpiredBookings();
   Future<Result<void>> autoDeleteExpiredPlayerAds();

@@ -22,11 +22,14 @@ class CreateBookingScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
-  int? _startHour;
-  int? _endHour;
+  int? _startMinute;
+  int? _endMinute;
   List<BookedSlotInfo> _bookedSlots = [];
-  int _open24 = 16;
-  int _close24 = 22;
+  int _openMinutes = 16 * 60;
+  int _closeMinutes = 22 * 60;
+  int _maxBookingMinutes = 3 * 60;
+  int _fineFromMinutes = 16 * 60;
+  int _fineToMinutes = 20 * 60;
   bool _loadingSlots = false;
 
   @override
@@ -41,23 +44,39 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
 
   Future<void> _loadSlots() async {
     final form = ref.read(bookingFormProvider);
+    debugPrint('_loadSlots groupId=${widget.facility.groupId} date=${form.selectedDate}');
     setState(() => _loadingSlots = true);
 
     try {
       final settingsResult = await ref.read(adminRepositoryProvider).getGroupSettings(widget.facility.groupId);
       settingsResult.when(
         success: (data) {
-          final parts = (data['opening_time'] as String? ?? '00:00').split(':');
-          final open24 = int.tryParse(parts.isNotEmpty ? parts[0] : '0') ?? 16;
+          final s = GroupSettings.fromJson(data);
+          final openParts = s.openingTime.split(':');
+          final openH = int.tryParse(openParts.isNotEmpty ? openParts[0] : '16') ?? 16;
+          final openM = int.tryParse(openParts.length > 1 ? openParts[1] : '0') ?? 0;
           final dayIndex = form.selectedDate.weekday;
           final closeKey = [
             'closing_time_sun', 'closing_time_mon', 'closing_time_tue',
             'closing_time_wed', 'closing_time_thu', 'closing_time_fri', 'closing_time_sat',
           ][dayIndex == 7 ? 0 : dayIndex];
-          final closeParts = ((data[closeKey] as String?) ?? '00:00').split(':');
-          final close24 = int.tryParse(closeParts.isNotEmpty ? closeParts[0] : '0') ?? 22;
-          _open24 = open24;
-          _close24 = close24;
+          final closeStr = data[closeKey] as String? ?? s.closingTimeSun;
+          final closeParts = closeStr.split(':');
+          final closeH = int.tryParse(closeParts.isNotEmpty ? closeParts[0] : '22') ?? 22;
+          final closeM = int.tryParse(closeParts.length > 1 ? closeParts[1] : '0') ?? 0;
+          final fineFromParts = s.slotFineFrom.split(':');
+          final fineFromH = int.tryParse(fineFromParts.isNotEmpty ? fineFromParts[0] : '16') ?? 16;
+          final fineFromM = int.tryParse(fineFromParts.length > 1 ? fineFromParts[1] : '0') ?? 0;
+          final fineToParts = s.slotFineTo.split(':');
+          final fineToH = int.tryParse(fineToParts.isNotEmpty ? fineToParts[0] : '20') ?? 20;
+          final fineToM = int.tryParse(fineToParts.length > 1 ? fineToParts[1] : '0') ?? 0;
+          setState(() {
+            _openMinutes = openH * 60 + openM;
+            _closeMinutes = closeH * 60 + closeM;
+            _maxBookingMinutes = (s.maxBookingHours * 60).round();
+            _fineFromMinutes = fineFromH * 60 + fineFromM;
+            _fineToMinutes = fineToH * 60 + fineToM;
+          });
         },
         failure: (_) {},
       );
@@ -74,17 +93,18 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
               final endStr = b['end_at'] as String? ?? '';
               final startDt = DateTime.tryParse(startStr)?.toLocal();
               final endDt = DateTime.tryParse(endStr)?.toLocal();
-              if (startDt == null || endDt == null) return BookedSlotInfo(startHour: 0, endHour: 0);
-              return BookedSlotInfo(startHour: startDt.hour, endHour: endDt.hour);
+              if (startDt == null || endDt == null) return BookedSlotInfo(startMinute: 0, endMinute: 0);
+              return BookedSlotInfo(startMinute: startDt.hour * 60 + startDt.minute, endMinute: endDt.hour * 60 + endDt.minute);
             }).toList();
-            _startHour = null;
-            _endHour = null;
+            _startMinute = null;
+            _endMinute = null;
           });
         },
         failure: (_) => setState(() => _bookedSlots = []),
       );
     } catch (_) {}
 
+    debugPrint('_loadSlots done open=$_openMinutes close=$_closeMinutes max=$_maxBookingMinutes booked=${_bookedSlots.length}');
     if (mounted) setState(() => _loadingSlots = false);
   }
 
@@ -104,21 +124,35 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
     }
   }
 
+  int _effectiveMinutes(int start, int end) =>
+      end <= start ? end + 1440 - start : end - start;
+
   Future<void> _submit() async {
-    if (_startHour == null || _endHour == null || _endHour! <= _startHour!) {
+    if (_startMinute == null || _endMinute == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('اختر وقت البداية والنهاية')),
+      );
+      return;
+    }
+    final effMin = _effectiveMinutes(_startMinute!, _endMinute!);
+    if (effMin < 60) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('اختر وقت البداية والنهاية')),
       );
       return;
     }
 
+    final crossesMidnight = _closeMinutes < _openMinutes;
+
+    DateTime _dt(int min, DateTime date) {
+      var d = DateTime(date.year, date.month, date.day, min ~/ 60, min % 60);
+      if (crossesMidnight && min < _openMinutes) d = d.add(const Duration(days: 1));
+      return d;
+    }
+
     final form = ref.read(bookingFormProvider);
-    final start = DateTime(
-      form.selectedDate.year, form.selectedDate.month, form.selectedDate.day, _startHour!,
-    );
-    final end = DateTime(
-      form.selectedDate.year, form.selectedDate.month, form.selectedDate.day, _endHour!,
-    );
+    final start = _dt(_startMinute!, form.selectedDate);
+    final end = _dt(_endMinute!, form.selectedDate);
 
     double balance = 0;
     double depositAmount = 5000;
@@ -138,7 +172,8 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
       );
     } catch (_) {}
 
-    final totalPrice = (_endHour! - _startHour!) * form.pricePerHour;
+    final totalMinutes = effMin;
+    final totalPrice = (totalMinutes / 60) * form.pricePerHour;
 
     if (balance >= totalPrice) {
       final scheme = Theme.of(context).colorScheme;
@@ -331,22 +366,18 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
             )
           else
             SlotPickerWidget(
-              open24: _open24,
-              close24: _close24,
+              openMinutes: _openMinutes,
+              closeMinutes: _closeMinutes,
               bookedSlots: _bookedSlots,
               pricePerHour: form.pricePerHour,
+              maxBookingMinutes: _maxBookingMinutes,
+              fineFromMinutes: _fineFromMinutes,
+              fineToMinutes: _fineToMinutes,
               onChanged: (sel) {
-                if (sel.start == null) {
-                  setState(() {
-                    _startHour = null;
-                    _endHour = null;
-                  });
-                } else {
-                  setState(() {
-                    _startHour = sel.start;
-                    _endHour = sel.end ?? sel.start! + 1;
-                  });
-                }
+                setState(() {
+                  _startMinute = sel.startMinute;
+                  _endMinute = sel.endMinute;
+                });
               },
             ),
           const SizedBox(height: 32),

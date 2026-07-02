@@ -236,6 +236,9 @@ class AdminActionNotifier extends StateNotifier<ActionStore> {
     required String closingTimeSat,
     required double depositAmount,
     required int contractExpiryHours,
+    required double maxBookingHours,
+    String slotFineFrom = '16:00',
+    String slotFineTo = '20:00',
   }) async {
     const key = 'settings';
     state = state.start(key);
@@ -251,6 +254,9 @@ class AdminActionNotifier extends StateNotifier<ActionStore> {
       closingTimeSat: closingTimeSat,
       depositAmount: depositAmount,
       contractExpiryHours: contractExpiryHours,
+      maxBookingHours: maxBookingHours,
+      slotFineFrom: slotFineFrom,
+      slotFineTo: slotFineTo,
     );
     result.when(
       success: (_) {

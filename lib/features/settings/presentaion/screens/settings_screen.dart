@@ -43,7 +43,7 @@ class SettingsScreen extends ConsumerWidget {
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                           Text(auth.phone,
                             style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14)),
-                          if (auth.role != null)
+                          if (auth.role != null && auth.role != 'user')
                             Container(
                               margin: const EdgeInsets.only(top: 4),
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

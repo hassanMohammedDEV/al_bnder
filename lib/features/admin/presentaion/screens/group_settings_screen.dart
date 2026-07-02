@@ -20,6 +20,11 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
   final _closingHours = <String, int>{};
   final _depositCtl = TextEditingController();
   final _expiryCtl = TextEditingController();
+  final _maxBookingCtl = TextEditingController();
+  int? _fineFromHour;
+  int? _fineFromMinute;
+  int? _fineToHour;
+  int? _fineToMinute;
 
   String? _selectedGroupId;
   String? _error;
@@ -44,10 +49,19 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
     return '$h:00 $p';
   }
 
+  String _format12Fine(int? hour24, int? minute) {
+    if (hour24 == null) return 'اختر';
+    final h = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
+    final p = hour24 < 12 ? 'ص' : 'م';
+    final m = (minute ?? 0).toString().padLeft(2, '0');
+    return '$h:$m $p';
+  }
+
   @override
   void dispose() {
     _depositCtl.dispose();
     _expiryCtl.dispose();
+    _maxBookingCtl.dispose();
     super.dispose();
   }
 
@@ -63,8 +77,15 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
       final parts = closeMap[day]!.split(':');
       _closingHours[day] = int.tryParse(parts.isNotEmpty ? parts[0] : '0') ?? 0;
     }
+    final fineFromParts = s.slotFineFrom.split(':');
+    _fineFromHour = int.tryParse(fineFromParts.isNotEmpty ? fineFromParts[0] : '16') ?? 16;
+    _fineFromMinute = int.tryParse(fineFromParts.length > 1 ? fineFromParts[1] : '0') ?? 0;
+    final fineToParts = s.slotFineTo.split(':');
+    _fineToHour = int.tryParse(fineToParts.isNotEmpty ? fineToParts[0] : '20') ?? 20;
+    _fineToMinute = int.tryParse(fineToParts.length > 1 ? fineToParts[1] : '0') ?? 0;
     _depositCtl.text = s.depositAmount.toStringAsFixed(0);
     _expiryCtl.text = s.contractExpiryHours.toString();
+    _maxBookingCtl.text = s.maxBookingHours.toStringAsFixed(1);
     _initialized = true;
   }
 
@@ -97,9 +118,48 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
     if (picked != null) setState(() => _closingHours[day] = picked);
   }
 
+  Future<void> _pickFineFrom() async {
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (ctx) => HourPickerDialog(
+        initialHour: _fineFromHour == null ? 16 : (_fineFromHour! == 0 ? 12 : (_fineFromHour! > 12 ? _fineFromHour! - 12 : _fineFromHour!)),
+        initialPm: _fineFromHour != null && _fineFromHour! >= 12,
+        title: 'اختر بداية فترة التقسيم الدقيق',
+        open24: 0,
+        close24: 24,
+      ),
+    );
+    if (picked != null) setState(() {
+      _fineFromHour = picked;
+      _fineFromMinute = 0;
+    });
+  }
+
+  Future<void> _pickFineTo() async {
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (ctx) => HourPickerDialog(
+        initialHour: _fineToHour == null ? 20 : (_fineToHour! == 0 ? 12 : (_fineToHour! > 12 ? _fineToHour! - 12 : _fineToHour!)),
+        initialPm: _fineToHour != null && _fineToHour! >= 12,
+        title: 'اختر نهاية فترة التقسيم الدقيق',
+        open24: 0,
+        close24: 24,
+      ),
+    );
+    if (picked != null) setState(() {
+      _fineToHour = picked;
+      _fineToMinute = 0;
+    });
+  }
+
   String _toTimeStr(int? hour) {
     if (hour == null) return '00:00';
     return '${hour.toString().padLeft(2, '0')}:00';
+  }
+
+  String _toTimeStrWithMin(int? hour, int? minute) {
+    if (hour == null) return '00:00';
+    return '${hour.toString().padLeft(2, '0')}:${(minute ?? 0).toString().padLeft(2, '0')}';
   }
 
   Future<void> _save() async {
@@ -119,6 +179,11 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
       setState(() => _error = 'مدة انتهاء العقد غير صالحة');
       return;
     }
+    final maxHours = double.tryParse(_maxBookingCtl.text.trim());
+    if (maxHours == null || maxHours <= 0) {
+      setState(() => _error = 'الحد الأقصى للحجز غير صالح');
+      return;
+    }
 
     setState(() => _saving = true);
     final result = await ref.read(adminActionProvider.notifier).updateGroupSettings(
@@ -133,6 +198,9 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
       closingTimeSat: _toTimeStr(_closingHours['sat']),
       depositAmount: deposit,
       contractExpiryHours: expiry,
+      maxBookingHours: maxHours,
+      slotFineFrom: _toTimeStrWithMin(_fineFromHour, _fineFromMinute),
+      slotFineTo: _toTimeStrWithMin(_fineToHour, _fineToMinute),
     );
     setState(() => _saving = false);
 
@@ -231,6 +299,36 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
           controller: _depositCtl,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(border: OutlineInputBorder(), hintText: '5000'),
+        ),
+        const SizedBox(height: 16),
+        Text('الحد الأقصى للحجز (ساعة)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant)),
+        const SizedBox(height: 4),
+        TextField(
+          controller: _maxBookingCtl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(border: OutlineInputBorder(), hintText: '3'),
+        ),
+        const SizedBox(height: 16),
+        Text('بداية فترة التقسيم الدقيق (تقسيم 30 دقيقة)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant)),
+        const SizedBox(height: 4),
+        Card(
+          child: ListTile(
+            leading: Icon(Icons.schedule, color: scheme.primary),
+            title: Text(_format12Fine(_fineFromHour, _fineFromMinute)),
+            trailing: const Icon(Icons.edit),
+            onTap: _pickFineFrom,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('نهاية فترة التقسيم الدقيق (تقسيم 60 دقيقة)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant)),
+        const SizedBox(height: 4),
+        Card(
+          child: ListTile(
+            leading: Icon(Icons.schedule, color: scheme.primary),
+            title: Text(_format12Fine(_fineToHour, _fineToMinute)),
+            trailing: const Icon(Icons.edit),
+            onTap: _pickFineTo,
+          ),
         ),
         const SizedBox(height: 16),
         Text('مدة انتهاء العقد (ساعة)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant)),

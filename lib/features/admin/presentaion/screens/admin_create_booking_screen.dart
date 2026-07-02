@@ -7,6 +7,7 @@ import '../../../../presentaion/shared/slot_picker_widget.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../facilities/providers/facility_provider.dart';
 import '../../../facilities/repositories/facility_repository_impl.dart';
+import '../../models/group_settings.dart';
 import '../../providers/admin_provider.dart';
 import '../../repositories/admin_repository_impl.dart';
 import '../../../../core/helpers/error_helper.dart';
@@ -31,12 +32,15 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
   String? _selectedFacilityId;
   String? _selectedGroupId; // for super_admin who has no facilityGroupId
   DateTime _selectedDate = DateTime.now();
-  int? _startHour24;
-  int? _endHour24;
+  int? _startMinute;
+  int? _endMinute;
   bool _submitting = false;
   List<BookedSlotInfo> _bookedSlots = [];
-  int _open24 = 16;
-  int _close24 = 22;
+  int _openMinutes = 16 * 60; // 16:00
+  int _closeMinutes = 22 * 60; // 22:00
+  int _maxBookingMinutes = 3 * 60; // 3 hours default
+  int _fineFromMinutes = 16 * 60;
+  int _fineToMinutes = 20 * 60;
   bool _loadingSlots = false;
 
   bool _isRecurring = false;
@@ -90,20 +94,36 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
     setState(() => _loadingSlots = true);
 
     try {
+      debugPrint('_loadSlots groupId=$groupId facility=$facilityId');
       final settingsResult = await ref.read(adminRepositoryProvider).getGroupSettings(groupId);
       settingsResult.when(
         success: (data) {
-          final parts = (data['opening_time'] as String? ?? '00:00').split(':');
-          final open24 = int.tryParse(parts.isNotEmpty ? parts[0] : '0') ?? 16;
+          final s = GroupSettings.fromJson(data);
+          final openParts = s.openingTime.split(':');
+          final openH = int.tryParse(openParts.isNotEmpty ? openParts[0] : '16') ?? 16;
+          final openM = int.tryParse(openParts.length > 1 ? openParts[1] : '0') ?? 0;
           final dayIndex = _selectedDate.weekday;
           final closeKey = [
             'closing_time_sun', 'closing_time_mon', 'closing_time_tue',
             'closing_time_wed', 'closing_time_thu', 'closing_time_fri', 'closing_time_sat',
           ][dayIndex == 7 ? 0 : dayIndex];
-          final closeParts = ((data[closeKey] as String?) ?? '00:00').split(':');
-          final close24 = int.tryParse(closeParts.isNotEmpty ? closeParts[0] : '0') ?? 22;
-          _open24 = open24;
-          _close24 = close24;
+          final closeStr = data[closeKey] as String? ?? s.closingTimeSun;
+          final closeParts = closeStr.split(':');
+          final closeH = int.tryParse(closeParts.isNotEmpty ? closeParts[0] : '22') ?? 22;
+          final closeM = int.tryParse(closeParts.length > 1 ? closeParts[1] : '0') ?? 0;
+          final fineFromParts = s.slotFineFrom.split(':');
+          final fineFromH = int.tryParse(fineFromParts.isNotEmpty ? fineFromParts[0] : '16') ?? 16;
+          final fineFromM = int.tryParse(fineFromParts.length > 1 ? fineFromParts[1] : '0') ?? 0;
+          final fineToParts = s.slotFineTo.split(':');
+          final fineToH = int.tryParse(fineToParts.isNotEmpty ? fineToParts[0] : '20') ?? 20;
+          final fineToM = int.tryParse(fineToParts.length > 1 ? fineToParts[1] : '0') ?? 0;
+          setState(() {
+            _openMinutes = openH * 60 + openM;
+            _closeMinutes = closeH * 60 + closeM;
+            _maxBookingMinutes = (s.maxBookingHours * 60).round();
+            _fineFromMinutes = fineFromH * 60 + fineFromM;
+            _fineToMinutes = fineToH * 60 + fineToM;
+          });
         },
         failure: (_) {},
       );
@@ -120,17 +140,18 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
               final endStr = b['end_at'] as String? ?? '';
               final startDt = DateTime.tryParse(startStr)?.toLocal();
               final endDt = DateTime.tryParse(endStr)?.toLocal();
-              if (startDt == null || endDt == null) return BookedSlotInfo(startHour: 0, endHour: 0);
-              return BookedSlotInfo(startHour: startDt.hour, endHour: endDt.hour);
+              if (startDt == null || endDt == null) return BookedSlotInfo(startMinute: 0, endMinute: 0);
+              return BookedSlotInfo(startMinute: startDt.hour * 60 + startDt.minute, endMinute: endDt.hour * 60 + endDt.minute);
             }).toList();
-            _startHour24 = _open24;
-            _endHour24 = _open24 + 1;
+            _startMinute = null;
+            _endMinute = null;
           });
         },
         failure: (_) => setState(() => _bookedSlots = []),
       );
     } catch (_) {}
 
+    debugPrint('_loadSlots done open=$_openMinutes close=$_closeMinutes max=$_maxBookingMinutes booked=${_bookedSlots.length}');
     if (mounted) setState(() => _loadingSlots = false);
   }
 
@@ -148,68 +169,11 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
     }
   }
 
-  Future<void> _pickTime({required bool isStart}) async {
-    final initial = isStart ? _startHour24 : _endHour24;
-    if (initial == null) return;
-    final initial12 = initial == 0 ? 12 : (initial > 12 ? initial - 12 : initial);
-    final initialPm = initial >= 12;
-
-    // Fetch working hours
-    final auth = ref.read(authStateProvider);
-    final groupId = _selectedGroupId ?? auth.facilityGroupId;
-    int open24 = 0;
-    int close24 = 24;
-    if (groupId != null) {
-      try {
-        final result = await ref.read(adminRepositoryProvider).getGroupSettings(groupId);
-        result.when(
-          success: (data) {
-            final parts = (data['opening_time'] as String? ?? '00:00').split(':');
-            open24 = int.tryParse(parts.isNotEmpty ? parts[0] : '0') ?? 0;
-            final dayIndex = _selectedDate.weekday;
-            final closeKey = [
-              'closing_time_sun', 'closing_time_mon', 'closing_time_tue',
-              'closing_time_wed', 'closing_time_thu', 'closing_time_fri', 'closing_time_sat',
-            ][dayIndex == 7 ? 0 : dayIndex];
-            final closeParts = ((data[closeKey] as String?) ?? '00:00').split(':');
-            close24 = int.tryParse(closeParts.isNotEmpty ? closeParts[0] : '0') ?? 0;
-          },
-          failure: (_) {},
-        );
-      } catch (_) {}
-    }
-
-    final picked = await showDialog<int>(
-      context: context,
-      builder: (ctx) => HourPickerDialog(
-        initialHour: initial12,
-        initialPm: initialPm,
-        title: isStart ? 'اختر وقت البداية' : 'اختر وقت النهاية',
-        open24: open24,
-        close24: close24,
-      ),
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _startHour24 = picked;
-          if (_endHour24 != null && _endHour24! <= picked) _endHour24 = picked + 1;
-        } else {
-          _endHour24 = picked;
-        }
-      });
-    }
-  }
-
-  String _formatTime(int hour24) {
-    final h = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
-    final p = hour24 < 12 ? 'ص' : 'م';
-    return '$h:00 $p';
-  }
-
   Future<void> _submit() async {
     if (_selectedFacilityId == null) { _snack('اختر الملعب', isError: true); return; }
-    if (_startHour24 == null || _endHour24 == null || _endHour24! <= _startHour24!) { _snack('اختر وقت البداية والنهاية', isError: true); return; }
+    if (_startMinute == null || _endMinute == null) { _snack('اختر وقت البداية والنهاية', isError: true); return; }
+    final effMin = _endMinute! <= _startMinute! ? _endMinute! + 1440 - _startMinute! : _endMinute! - _startMinute!;
+    if (effMin < 60) { _snack('اختر وقت البداية والنهاية', isError: true); return; }
     if (_isRecurring && _recurringDays.isEmpty) { _snack('اختر أيام التكرار', isError: true); return; }
     if (_isRecurring && _recurringEndDate == null) { _snack('اختر تاريخ انتهاء التكرار', isError: true); return; }
 
@@ -229,12 +193,15 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
       targetUserId = _selectedUser!['id'] as String;
     }
 
-    final startAt = DateTime(
-      _selectedDate.year, _selectedDate.month, _selectedDate.day, _startHour24!,
-    );
-    final endAt = DateTime(
-      _selectedDate.year, _selectedDate.month, _selectedDate.day, _endHour24!,
-    );
+    DateTime _dt(int min, DateTime date) {
+      var d = DateTime(date.year, date.month, date.day, min ~/ 60, min % 60);
+      if (_closeMinutes < _openMinutes && min < _openMinutes) {
+        d = d.add(const Duration(days: 1));
+      }
+      return d;
+    }
+    final startAt = _dt(_startMinute!, _selectedDate);
+    final endAt = _dt(_endMinute!, _selectedDate);
 
     Map<String, dynamic>? recurringRule;
     if (_isRecurring) {
@@ -542,22 +509,18 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
               )
             else if (_selectedFacilityId != null)
               SlotPickerWidget(
-                open24: _open24,
-                close24: _close24,
+                openMinutes: _openMinutes,
+                closeMinutes: _closeMinutes,
                 bookedSlots: _bookedSlots,
                 pricePerHour: _selectedFacilityPrice,
+                maxBookingMinutes: _maxBookingMinutes,
+                fineFromMinutes: _fineFromMinutes,
+                fineToMinutes: _fineToMinutes,
                 onChanged: (sel) {
-                  if (sel.start == null) {
-                    setState(() {
-                      _startHour24 = null;
-                      _endHour24 = null;
-                    });
-                  } else {
-                    setState(() {
-                      _startHour24 = sel.start;
-                      _endHour24 = sel.end ?? sel.start! + 1;
-                    });
-                  }
+                  setState(() {
+                    _startMinute = sel.startMinute;
+                    _endMinute = sel.endMinute;
+                  });
                 },
               ),
             const SizedBox(height: 24),
