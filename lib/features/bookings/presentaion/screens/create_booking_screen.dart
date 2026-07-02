@@ -130,14 +130,14 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
   Future<void> _submit() async {
     if (_startMinute == null || _endMinute == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر وقت البداية والنهاية')),
+        const SnackBar(content: Text('اختر وقت البداية والمدة')),
       );
       return;
     }
     final effMin = _effectiveMinutes(_startMinute!, _endMinute!);
     if (effMin < 60) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر وقت البداية والنهاية')),
+        const SnackBar(content: Text('مدة الحجز لا تقل عن ساعة')),
       );
       return;
     }

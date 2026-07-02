@@ -255,7 +255,7 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
               label: 'متاح',
             ),
             const SizedBox(width: 12),
-            _LegendChip(color: Colors.red.shade100, label: 'محجوز'),
+            _LegendChip(color: isDark ? Colors.red.shade300.withAlpha(80) : Colors.red.shade100, label: 'محجوز'),
           ],
         ),
         const SizedBox(height: 12),
@@ -278,27 +278,27 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
               final inFine = _toDisplay(adj) >= widget.fineFromMinutes &&
                   _toDisplay(adj) < widget.fineToMinutes;
 
-              return FilterChip(
-                label: Text(
-                  _fmt(minute),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: booked
-                        ? scheme.onSurfaceVariant
-                        : isSelected
-                            ? scheme.onPrimary
-                            : scheme.onSurface,
+                return FilterChip(
+                  label: Text(
+                    _fmt(minute),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      color: booked
+                          ? scheme.error
+                          : isSelected
+                              ? scheme.onPrimary
+                              : scheme.onSurface,
+                    ),
                   ),
-                ),
-                selected: isSelected,
-                onSelected: booked ? null : (_) => _onStartTap(minute),
-                selectedColor: scheme.primary,
-                backgroundColor: booked
-                    ? (isDark ? Colors.red.shade900.withAlpha(100) : Colors.red.shade100)
-                    : (isDark
-                        ? Colors.green.shade800.withAlpha(120)
-                        : Colors.green.shade100),
+                  selected: isSelected,
+                  onSelected: booked ? null : (_) => _onStartTap(minute),
+                  selectedColor: scheme.primary,
+                  backgroundColor: booked
+                      ? (isDark ? Colors.red.shade300.withAlpha(60) : Colors.red.shade100)
+                      : (isDark
+                          ? Colors.green.shade800.withAlpha(120)
+                          : Colors.green.shade100),
                 checkmarkColor: scheme.onPrimary,
                 showCheckmark: isSelected,
                 visualDensity: VisualDensity.compact,

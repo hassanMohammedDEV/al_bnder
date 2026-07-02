@@ -171,9 +171,9 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
 
   Future<void> _submit() async {
     if (_selectedFacilityId == null) { _snack('اختر الملعب', isError: true); return; }
-    if (_startMinute == null || _endMinute == null) { _snack('اختر وقت البداية والنهاية', isError: true); return; }
+    if (_startMinute == null || _endMinute == null) { _snack('اختر وقت البداية والمدة', isError: true); return; }
     final effMin = _endMinute! <= _startMinute! ? _endMinute! + 1440 - _startMinute! : _endMinute! - _startMinute!;
-    if (effMin < 60) { _snack('اختر وقت البداية والنهاية', isError: true); return; }
+    if (effMin < 60) { _snack('مدة الحجز لا تقل عن ساعة', isError: true); return; }
     if (_isRecurring && _recurringDays.isEmpty) { _snack('اختر أيام التكرار', isError: true); return; }
     if (_isRecurring && _recurringEndDate == null) { _snack('اختر تاريخ انتهاء التكرار', isError: true); return; }
 

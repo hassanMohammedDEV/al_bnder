@@ -43,6 +43,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _tab(int index, Widget child) =>
     _visitedTabs.contains(index) ? child : const SizedBox.shrink();
 
+  Widget _scheduleBtn() {
+    return IconButton(
+      icon: const Icon(Icons.schedule),
+      tooltip: 'الأوقات المتاحة',
+      onPressed: () => context.push('/available-slots'),
+    );
+  }
+
   Widget _bellBadge() {
     final count = ref.watch(unreadCountProvider);
     return Stack(
@@ -77,7 +85,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('البندر'),
-        actions: [_bellBadge()],
+        actions: [_scheduleBtn(), _bellBadge()],
       ),
       body: SafeArea(
         child: IndexedStack(
@@ -107,7 +115,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('البندر'),
-        actions: [_bellBadge()],
+        actions: [_scheduleBtn(), _bellBadge()],
       ),
       body: SafeArea(
         child: IndexedStack(
@@ -133,7 +141,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('البندر'),
-        actions: [_bellBadge()],
+        actions: [_scheduleBtn(), _bellBadge()],
       ),
       body: SafeArea(
         child: IndexedStack(
