@@ -9,36 +9,49 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/auth_validation_provider.dart';
 
-class RegisterScreen extends ConsumerWidget {
+class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
+}
+
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+  bool _consentAccepted = false;
+
+  Future<void> register() async {
+    FocusScope.of(context).unfocus();
+    ref.read(authValidationProvider.notifier).validateAll();
+    if (!ref.read(authValidationProvider).isValid) return;
+    if (!_consentAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى الموافقة على سياسة الخصوصية وشروط الاستخدام')),
+      );
+      return;
+    }
+
+    final auth = ref.read(authStateProvider);
+    final result = await ref.read(authActionProvider.notifier).register(
+      auth.phone,
+      auth.password,
+      name: auth.name,
+    );
+    if (!context.mounted) return;
+    result.when(
+      success: (_) {},
+      failure: (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(translateError(e))),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final validation = ref.watch(authValidationProvider);
     final action = ref.watch(authActionProvider);
-
-    Future<void> register() async {
-      FocusScope.of(context).unfocus();
-      ref.read(authValidationProvider.notifier).validateAll();
-      if (!ref.read(authValidationProvider).isValid) return;
-
-      final auth = ref.read(authStateProvider);
-      final result = await ref.read(authActionProvider.notifier).register(
-        auth.phone,
-        auth.password,
-        name: auth.name,
-      );
-      if (!context.mounted) return;
-      result.when(
-        success: (_) {},
-        failure: (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(translateError(e))),
-          );
-        },
-      );
-    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('حساب جديد')),
@@ -94,7 +107,42 @@ class RegisterScreen extends ConsumerWidget {
                 },
                 prefix: Icon(Icons.lock_outline, color: scheme.onSurfaceVariant),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Checkbox(
+                    value: _consentAccepted,
+                    onChanged: (v) => setState(() => _consentAccepted = v ?? false),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _consentAccepted = !_consentAccepted),
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+                          children: [
+                            const TextSpan(text: 'أوافق على '),
+                            TextSpan(
+                              text: 'سياسة الخصوصية',
+                              style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600),
+                              recognizer: null,
+                            ),
+                            const TextSpan(text: ' و '),
+                            TextSpan(
+                              text: 'شروط الاستخدام',
+                              style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600),
+                              recognizer: null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               FilledButton(
                 onPressed: action.isLoading('register') ? null : register,
                 child: action.isLoading('register')

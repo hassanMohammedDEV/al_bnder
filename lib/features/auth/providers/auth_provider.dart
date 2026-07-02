@@ -159,6 +159,20 @@ class AuthActionNotifier extends StateNotifier<ActionStore> {
     return result;
   }
 
+  Future<Result<void>> deleteAccount() async {
+    const key = 'delete_account';
+    state = state.start(key);
+    final result = await ref.read(authServiceProvider)._repo.deleteAccount();
+    result.when(
+      success: (_) {
+        ref.read(authStateProvider.notifier).logout();
+        state = state.success(key);
+      },
+      failure: (e) => state = state.fail(key, e),
+    );
+    return result;
+  }
+
   Future<void> _fetchProfile() async {
     final result = await ref.read(authServiceProvider).getProfile();
     result.when(

@@ -8,4 +8,5 @@ abstract class AuthRepository {
   Future<Result<AuthState>> login(String phone, String password);
   Future<Result<AuthState>> register(String phone, String password, {String? name});
   Future<Result<Map<String, dynamic>>> getProfile();
+  Future<Result<void>> deleteAccount();
 }

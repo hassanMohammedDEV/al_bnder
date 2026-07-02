@@ -1158,7 +1158,7 @@ BEGIN
   ) ORDER BY bi.start_at) INTO v_booked_slots
   FROM booking_instances bi
   WHERE bi.facility_id = p_facility_id
-    AND bi.status IN ('confirmed', 'pending', 'pending_approval')
+    AND bi.status IN ('confirmed', 'pending_approval')
     AND bi.start_at >= v_day_start
     AND bi.end_at <= v_day_end;
 

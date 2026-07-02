@@ -149,6 +149,31 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
+        // Legal section
+        Text('القانونية', style: TextStyle(
+          fontSize: 14, fontWeight: FontWeight.w500, color: scheme.onSurfaceVariant,
+        )),
+        const SizedBox(height: 8),
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: Icon(Icons.privacy_tip_outlined, color: scheme.primary),
+                title: const Text('سياسة الخصوصية'),
+                trailing: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
+                onTap: () => context.push('/privacy'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Icon(Icons.description_outlined, color: scheme.primary),
+                title: const Text('شروط الاستخدام'),
+                trailing: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
+                onTap: () => context.push('/terms'),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
         // App info section
         Text('معلومات التطبيق', style: TextStyle(
           fontSize: 14, fontWeight: FontWeight.w500, color: scheme.onSurfaceVariant,
@@ -161,12 +186,6 @@ class SettingsScreen extends ConsumerWidget {
                 leading: Icon(Icons.info_outline, color: scheme.primary),
                 title: const Text('الإصدار'),
                 trailing: Text('1.0.0', style: TextStyle(color: scheme.onSurfaceVariant)),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: Icon(Icons.code, color: scheme.primary),
-                title: const Text('البندر - نظام حجز الملاعب'),
-                subtitle: const Text('تم التطوير باستخدام Flutter + Supabase'),
               ),
               const Divider(height: 1),
               ListTile(
@@ -186,6 +205,23 @@ class SettingsScreen extends ConsumerWidget {
                   try {
                     await launchUrl(url, mode: LaunchMode.externalApplication);
                   } catch (_) {}
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.email_outlined, color: scheme.primary),
+                ),
+                title: const Text('البريد الإلكتروني'),
+                subtitle: const Text('7assanwr@gmail.com'),
+                trailing: const Icon(Icons.copy, size: 18),
+                onTap: () {
+                  // Copy email to clipboard
                 },
               ),
             ],
@@ -217,6 +253,94 @@ class SettingsScreen extends ConsumerWidget {
           },
           icon: const Icon(Icons.logout, color: Colors.red),
           label: const Text('تسجيل الخروج', style: TextStyle(color: Colors.red)),
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Colors.red),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Delete account button
+        OutlinedButton.icon(
+          onPressed: () async {
+            final ctl = TextEditingController();
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => StatefulBuilder(
+                builder: (ctx, setDialogState) {
+                  final typed = ctl.text.trim();
+                  final matched = typed == 'حذف';
+                  return AlertDialog(
+                    title: const Text('حذف الحساب'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('سيتم حذف جميع بياناتك نهائياً ولا يمكن التراجع.'),
+                        const SizedBox(height: 8),
+                        const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.warning_amber_rounded, size: 18, color: Colors.orange),
+                            SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'إذا كان لديك رصيد في المحفظة، سيتم فقدانه. تواصل مع الإدارة قبل حذف الحساب لاسترداد رصيدك.',
+                                style: TextStyle(fontSize: 13, color: Colors.orange),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('للتأكيد، اكتب كلمة "حذف" في الحقل أدناه:', style: TextStyle(fontSize: 13)),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: ctl,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: 'حذف',
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                            prefixIcon: matched
+                                ? const Icon(Icons.check_circle, color: Colors.green, size: 20)
+                                : const Icon(Icons.edit, size: 20),
+                          ),
+                          onChanged: (_) => setDialogState(() {}),
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+                      FilledButton(
+                        onPressed: matched ? () => Navigator.pop(ctx, true) : null,
+                        style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                        child: const Text('حذف'),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            );
+            if (confirm == true) {
+              final result = await ref.read(authActionProvider.notifier).deleteAccount();
+              if (context.mounted) {
+                result.when(
+                  success: (_) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('تم حذف الحساب')),
+                    );
+                    context.go('/login');
+                  },
+                  failure: (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('فشل حذف الحساب: $e')),
+                    );
+                  },
+                );
+              }
+            }
+          },
+          icon: const Icon(Icons.delete_forever, color: Colors.red),
+          label: const Text('حذف الحساب', style: TextStyle(color: Colors.red)),
           style: OutlinedButton.styleFrom(
             side: const BorderSide(color: Colors.red),
             padding: const EdgeInsets.symmetric(vertical: 14),

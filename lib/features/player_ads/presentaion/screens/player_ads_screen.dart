@@ -260,26 +260,29 @@ class _PlayerAdCard extends ConsumerWidget {
                     ),
                   ),
                 ),
-                if (!isLooking && ad.playersNeeded != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: scheme.primaryContainer.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '${ad.playersNeeded}',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: scheme.primary),
-                    ),
-                  ),
-                const SizedBox(width: 8),
                 Text(_timeAgo(ad.createdAt), style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
               ],
             ),
+            if (!isLooking && ad.playersNeeded != null) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${ad.playersNeeded} لاعبين',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: scheme.primary),
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             if (isLooking) ...[
               if (ad.days.isNotEmpty)
-                _InfoRow(icon: Icons.calendar_today, text: ad.days.map(_dayName).join(' - ')),
+                _InfoRow(icon: Icons.calendar_today, text: 'الأيام: ${ad.days.map(_dayName).join(' - ')}'),
+              if (ad.date != null)
+                _InfoRow(icon: Icons.event, text: 'التاريخ: ${ad.date!} (${_dayNameFromDate(ad.date!)})'),
               if (ad.startTime != null)
                 _InfoRow(icon: Icons.access_time, text: '${ad.startTime} - ${ad.endTime ?? ''}'),
               if (ad.facilityName != null && ad.facilityName!.isNotEmpty)
@@ -288,7 +291,7 @@ class _PlayerAdCard extends ConsumerWidget {
                 _InfoRow(icon: Icons.sports, text: ad.position!),
             ] else ...[
               if (ad.date != null)
-                _InfoRow(icon: Icons.event, text: ad.date!),
+                _InfoRow(icon: Icons.event, text: 'التاريخ: ${ad.date!} (${_dayNameFromDate(ad.date!)})'),
               if (ad.startTime != null)
                 _InfoRow(icon: Icons.access_time, text: '${ad.startTime} - ${ad.endTime ?? ''}'),
               if (ad.facilityName != null && ad.facilityName!.isNotEmpty)
@@ -311,6 +314,8 @@ class _PlayerAdCard extends ConsumerWidget {
                 ],
                 if (!isCreator) ...[
                   _ActionBtn(icon: Icons.flag_outlined, color: scheme.onSurfaceVariant, onTap: () => _reportAd(context, ref)),
+                  const SizedBox(width: 6),
+                  _PhoneBtn(phone: ad.creatorPhone),
                   const SizedBox(width: 6),
                   _WhatsAppBtn(phone: ad.creatorPhone),
                 ],
@@ -346,6 +351,21 @@ class _PlayerAdCard extends ConsumerWidget {
     if (diff.inDays < 2) return 'منذ يوم';
     if (diff.inDays < 7) return 'منذ ${diff.inDays} أيام';
     return '${dt.year}/${dt.month}/${dt.day}';
+  }
+
+  String _dayNameFromDate(String dateStr) {
+    final dt = DateTime.tryParse(dateStr);
+    if (dt == null) return '';
+    switch (dt.weekday) {
+      case 1: return 'الإثنين';
+      case 2: return 'الثلاثاء';
+      case 3: return 'الأربعاء';
+      case 4: return 'الخميس';
+      case 5: return 'الجمعة';
+      case 6: return 'السبت';
+      case 7: return 'الأحد';
+      default: return '';
+    }
   }
 
   void _confirmDelete(BuildContext context, WidgetRef ref) {
@@ -476,6 +496,29 @@ class _ActionBtn extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Icon(icon, size: 16, color: color),
+      ),
+    );
+  }
+}
+
+class _PhoneBtn extends StatelessWidget {
+  final String phone;
+  const _PhoneBtn({required this.phone});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        launchUrl(Uri.parse('tel:${phone.replaceAll(' ', '')}'), mode: LaunchMode.externalApplication);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.blue.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(Icons.call, size: 16, color: Colors.blue),
       ),
     );
   }

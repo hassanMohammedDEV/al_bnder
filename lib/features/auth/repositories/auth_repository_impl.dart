@@ -54,6 +54,11 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> deleteAccount() {
+    return _apiClient.post('rpc/delete_my_account', body: {}, parser: (_) {});
+  }
+
+  @override
   Future<Result<AuthState>> login(String phone, String password) async {
     final email = '$phone@al-bndr.app';
     return _authApiClient.post('auth/v1/token?grant_type=password',
