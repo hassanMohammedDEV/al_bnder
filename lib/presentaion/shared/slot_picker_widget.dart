@@ -276,56 +276,50 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
           fontSize: 13, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant,
         )),
         const SizedBox(height: 6),
-        SizedBox(
-          height: 44,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            itemCount: startSlots.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 6),
-            itemBuilder: (_, i) {
-              final minute = startSlots[i];
-              final adj = _toAdj(minute);
-              final booked = _isBooked(minute);
-              final isSelected = _startAdj == adj;
-              final inFine = _toDisplay(adj) >= widget.fineFromMinutes &&
-                  _toDisplay(adj) < widget.fineToMinutes;
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: startSlots.map((minute) {
+            final adj = _toAdj(minute);
+            final booked = _isBooked(minute);
+            final isSelected = _startAdj == adj;
+            final inFine = _toDisplay(adj) >= widget.fineFromMinutes &&
+                _toDisplay(adj) < widget.fineToMinutes;
 
-                return FilterChip(
-                  label: Text(
-                    _fmt(minute),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      color: booked
-                          ? scheme.error
-                          : isSelected
-                              ? scheme.onPrimary
-                              : scheme.onSurface,
-                    ),
-                  ),
-                  selected: isSelected,
-                  onSelected: booked ? null : (_) => _onStartTap(minute),
-                  selectedColor: scheme.primary,
-                  backgroundColor: booked
-                      ? (isDark ? Colors.red.shade300.withAlpha(60) : Colors.red.shade100)
-                      : (isDark
-                          ? Colors.green.shade800.withAlpha(120)
-                          : Colors.green.shade100),
-                checkmarkColor: scheme.onPrimary,
-                showCheckmark: isSelected,
-                visualDensity: VisualDensity.compact,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(
-                    color: inFine && !booked && !isSelected
-                        ? scheme.primary.withAlpha(60)
-                        : Colors.transparent,
-                  ),
+            return FilterChip(
+              label: Text(
+                _fmt(minute),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: booked
+                      ? scheme.error
+                      : isSelected
+                          ? scheme.onPrimary
+                          : scheme.onSurface,
                 ),
-              );
-            },
-          ),
+              ),
+              selected: isSelected,
+              onSelected: booked ? null : (_) => _onStartTap(minute),
+              selectedColor: scheme.primary,
+              backgroundColor: booked
+                  ? (isDark ? Colors.red.shade300.withAlpha(60) : Colors.red.shade100)
+                  : (isDark
+                      ? Colors.green.shade800.withAlpha(120)
+                      : Colors.green.shade100),
+              checkmarkColor: scheme.onPrimary,
+              showCheckmark: isSelected,
+              visualDensity: VisualDensity.compact,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(
+                  color: inFine && !booked && !isSelected
+                      ? scheme.primary.withAlpha(60)
+                      : Colors.transparent,
+                ),
+              ),
+            );
+          }).toList(),
         ),
         if (durations.isNotEmpty) ...[
           const SizedBox(height: 16),
