@@ -258,6 +258,17 @@ class AdminRepositoryImpl implements AdminRepository {
   }
 
   @override
+  Future<Result<Map<String, dynamic>>> cancelBookingInstance({
+    required String bookingId,
+    required String instanceId,
+  }) {
+    return _apiClient.post('rpc/cancel_booking_instance', body: {
+      'p_booking_id': bookingId,
+      'p_instance_id': instanceId,
+    }, parser: (json) => json as Map<String, dynamic>);
+  }
+
+  @override
   Future<Result<Map<String, dynamic>>> shrinkBooking({
     required String bookingId,
     required DateTime newEndAt,

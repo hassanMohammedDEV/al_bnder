@@ -1,31 +1,24 @@
 import 'package:app_platform_network/network.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TokenManager {
   String? _token;
   String? get token => _token;
+  final _secure = const FlutterSecureStorage();
 
-  void setToken(String t) {
+  /// Used by ProviderScope override in main.dart (avoids async).
+  void setLoadedToken(String t) => _token = t;
+
+  Future<void> setToken(String t) async {
     _token = t;
-    _persist();
+    await _secure.write(key: 'auth_token', value: t);
   }
 
   Future<void> clear() async {
     _token = null;
-    await _remove();
-  }
-
-  Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_token != null) {
-      await prefs.setString('auth_token', _token!);
-    }
-  }
-
-  Future<void> _remove() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
+    await _secure.delete(key: 'auth_token');
   }
 }
 

@@ -328,20 +328,7 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
             if (booking['instances'] is List && (booking['instances'] as List).isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  'الأوقات: ${(booking['instances'] as List).map((inst) {
-                    final startDt = DateTime.parse(inst['start_at']).toLocal();
-                    final endDt = DateTime.parse(inst['end_at']).toLocal();
-                    final sh = startDt.hour;
-                    final eh = endDt.hour;
-                    final sh12 = sh == 0 ? 12 : (sh <= 12 ? sh : sh - 12);
-                    final eh12 = eh == 0 ? 12 : (eh <= 12 ? eh : eh - 12);
-                    final sp = sh < 12 ? 'ص' : 'م';
-                    final ep = eh < 12 ? 'ص' : 'م';
-                    return '$sh12:00 $sp - $eh12:00 $ep';
-                  }).join(', ')}',
-                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-                ),
+                child: _buildInstancesWidget(booking['instances'] as List, booking['id'] as String, scheme),
               ),
             const SizedBox(height: 12),
             Row(
@@ -368,20 +355,74 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.cancel_outlined, size: 18),
-                    label: Text('إلغاء', maxLines: 1, overflow: TextOverflow.ellipsis),
-                    style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
-                    onPressed: isProcessing ? null : () => _cancelBooking(context, id),
-                  ),
-                ),
               ],
             ),
+            const SizedBox(height: 8),
+            ..._buildCancelButtons(booking, isProcessing, scheme),
           ],
         ),
       ),
+    );
+  }
+
+  List<Widget> _buildCancelButtons(Map<String, dynamic> booking, bool isProcessing, ColorScheme scheme) {
+    final id = booking['id'] as String;
+    final instancesList = (booking['instances'] as List?) ?? [];
+    final isRecurring = instancesList.length > 1;
+    if (!isRecurring) {
+      return [
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.cancel_outlined, size: 18),
+            label: const Text('إلغاء', maxLines: 1, overflow: TextOverflow.ellipsis),
+            style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
+            onPressed: isProcessing ? null : () => _cancelBooking(context, id),
+          ),
+        ),
+      ];
+    }
+    return instancesList
+        .where((inst) => inst['status'] != 'cancelled' && inst['status'] != 'completed')
+        .map((inst) => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.cancel_outlined, size: 18),
+              label: Text('إلغاء: ${dateLabelWithDay(DateTime.parse(inst['start_at'] as String).toLocal())}'),
+              style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
+              onPressed: isProcessing ? null : () => _cancelInstance(id, inst['id'] as String, DateTime.parse(inst['start_at'] as String).toLocal()),
+            ),
+          ),
+        )).toList();
+  }
+
+  Future<void> _cancelInstance(String bookingId, String instanceId, DateTime dt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد إلغاء الموعد'),
+        content: Text('هل أنت متأكد من إلغاء موعد ${dateLabelWithDay(dt)}؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('إلغاء الموعد')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    final result = await ref.read(adminRepositoryProvider).cancelBookingInstance(
+      bookingId: bookingId, instanceId: instanceId,
+    );
+    if (!mounted) return;
+    result.when(
+      success: (data) {
+        ref.read(pendingBookingsProvider.notifier).load();
+        final msg = data['message'] as String? ?? 'تم إلغاء الموعد';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      },
+      failure: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e)))),
     );
   }
 
@@ -422,6 +463,55 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
           Text(value, style: const TextStyle(fontSize: 13)),
         ],
       ),
+    );
+  }
+
+  Widget _buildInstancesWidget(List instances, String bookingId, ColorScheme scheme) {
+    final active = instances.where((inst) =>
+      inst['status'] != 'cancelled' && inst['status'] != 'completed'
+    ).toList();
+    if (active.isEmpty) return const SizedBox.shrink();
+    final firstStart = DateTime.parse(active.first['start_at']).toLocal();
+    final firstEnd = DateTime.parse(active.first['end_at']).toLocal();
+    final s = firstStart.hour < 12 ? 'ص' : 'م';
+    final e = firstEnd.hour < 12 ? 'ص' : 'م';
+    final sh = firstStart.hour == 0 ? 12 : (firstStart.hour <= 12 ? firstStart.hour : firstStart.hour - 12);
+    final eh = firstEnd.hour == 0 ? 12 : (firstEnd.hour <= 12 ? firstEnd.hour : firstEnd.hour - 12);
+    final timeStr = '$sh:00 $s - $eh:00 $e';
+    if (active.length == 1) {
+      return Text('الوقت: $timeStr', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('الوقت: $timeStr', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+        const SizedBox(height: 4),
+        ...active.map<Widget>((inst) {
+          final dt = DateTime.parse(inst['start_at']).toLocal();
+          final instanceId = inst['id'] as String;
+          final canCancel = dt.isAfter(DateTime.now());
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(dateLabelWithDay(dt), style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                ),
+                if (canCancel)
+                  SizedBox(
+                    width: 28, height: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: Icon(Icons.cancel_outlined, size: 16, color: scheme.error),
+                      tooltip: 'إلغاء هذا الموعد',
+                      onPressed: () => _cancelInstance(bookingId, instanceId, dt),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 }

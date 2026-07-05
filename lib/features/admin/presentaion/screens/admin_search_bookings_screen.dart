@@ -268,6 +268,48 @@ class _AdminSearchBookingsScreenState extends ConsumerState<AdminSearchBookingsS
     });
   }
 
+  List<Widget> _buildSearchInstances(List instances, String bookingId, ColorScheme scheme) {
+    final active = instances.where((inst) =>
+      inst['status'] != 'cancelled' && inst['status'] != 'completed'
+    ).toList();
+    if (active.isEmpty) return [];
+    final firstStart = DateTime.parse(active.first['start_at'] as String).toLocal();
+    final firstEnd = DateTime.parse(active.first['end_at'] as String).toLocal();
+    final timeStr = '${format12(firstStart.hour)} → ${format12(firstEnd.hour)}';
+    if (active.length == 1) {
+      return [Text(timeStr, style: TextStyle(fontSize: 13, color: scheme.primary))];
+    }
+    return [
+      Text(timeStr, style: TextStyle(fontSize: 13, color: scheme.primary)),
+      const SizedBox(height: 4),
+      ...active.map((inst) {
+        final dt = DateTime.parse(inst['start_at'] as String).toLocal();
+        final instanceId = inst['id'] as String;
+        final canCancel = dt.isAfter(DateTime.now());
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(dateLabelWithDay(dt), style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+              ),
+              if (canCancel)
+                SizedBox(
+                  width: 28, height: 28,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: Icon(Icons.cancel_outlined, size: 16, color: scheme.error),
+                    tooltip: 'إلغاء هذا الموعد',
+                    onPressed: () => _cancelInstance(bookingId, instanceId, dt),
+                  ),
+                ),
+            ],
+          ),
+        );
+      }),
+    ];
+  }
+
   Widget _buildCard(Map<String, dynamic> b, ColorScheme scheme) {
     final id = b['id'] as String;
     final name = b['user_name'] as String? ?? '';
@@ -277,6 +319,7 @@ class _AdminSearchBookingsScreenState extends ConsumerState<AdminSearchBookingsS
     final paidAmount = (b['paid_amount'] as num?)?.toDouble() ?? 0;
     final status = b['status'] as String? ?? '';
     final instances = (b['instances'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final isRecurring = instances.length > 1;
 
     String statusLabel;
     Color statusColor;
@@ -339,15 +382,7 @@ class _AdminSearchBookingsScreenState extends ConsumerState<AdminSearchBookingsS
                   style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant)),
             ],
             const SizedBox(height: 4),
-            ...instances.map((inst) {
-              final start = DateTime.parse(inst['start_at'] as String).toLocal();
-              final end = DateTime.parse(inst['end_at'] as String).toLocal();
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: Text('${format12(start.hour)} → ${format12(end.hour)}',
-                    style: TextStyle(fontSize: 13, color: scheme.primary)),
-              );
-            }),
+            ..._buildSearchInstances(instances, id, scheme),
             const SizedBox(height: 4),
             Text('$price ر.ي', style: const TextStyle(fontWeight: FontWeight.w600)),
             if (paidAmount > 0)
@@ -367,7 +402,7 @@ class _AdminSearchBookingsScreenState extends ConsumerState<AdminSearchBookingsS
                   ],
                 ),
               ),
-            if (canCancel) ...[
+            if (canCancel && !isRecurring) ...[
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -378,6 +413,23 @@ class _AdminSearchBookingsScreenState extends ConsumerState<AdminSearchBookingsS
                   onPressed: () => _cancelBooking(context, id),
                 ),
               ),
+            ],
+            if (canCancel && isRecurring) ...[
+              const SizedBox(height: 8),
+              ...instances
+                  .where((inst) => inst['status'] != 'cancelled' && inst['status'] != 'completed')
+                  .map((inst) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.cancel_outlined, size: 18),
+                        label: Text('إلغاء: ${dateLabelWithDay(DateTime.parse(inst['start_at'] as String).toLocal())}'),
+                        style: OutlinedButton.styleFrom(foregroundColor: scheme.error),
+                        onPressed: () => _cancelInstance(id, inst['id'] as String, DateTime.parse(inst['start_at'] as String).toLocal()),
+                      ),
+                    ),
+                  )),
             ],
           ],
         ),
@@ -405,6 +457,34 @@ class _AdminSearchBookingsScreenState extends ConsumerState<AdminSearchBookingsS
       success: (data) {
         _search();
         final msg = data['message'] as String? ?? 'تم إلغاء الحجز';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      },
+      failure: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e)))),
+    );
+  }
+
+  Future<void> _cancelInstance(String bookingId, String instanceId, DateTime dt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد إلغاء الموعد'),
+        content: Text('هل أنت متأكد من إلغاء موعد ${dateLabelWithDay(dt)}؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('إلغاء الموعد')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    final result = await ref.read(adminRepositoryProvider).cancelBookingInstance(
+      bookingId: bookingId, instanceId: instanceId,
+    );
+    if (!mounted) return;
+    result.when(
+      success: (data) {
+        _search();
+        final msg = data['message'] as String? ?? 'تم إلغاء الموعد';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       },
       failure: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e)))),

@@ -77,6 +77,20 @@ class PlayerAdActionNotifier extends Notifier<ActionStore> {
     return result;
   }
 
+  Future<Result<void>> createOfficialAd(Map<String, dynamic> data) async {
+    const key = 'create';
+    state = state.start(key);
+    final result = await ref.read(playerAdRepositoryProvider).createOfficialPlayerAd(data);
+    result.when(
+      success: (_) {
+        state = state.success(key);
+        ref.read(playerAdsProvider.notifier).reload();
+      },
+      failure: (e) => state = state.fail(key, e),
+    );
+    return result;
+  }
+
   Future<Result<void>> deleteAd(String id) async {
     const key = 'delete';
     state = state.start(key);

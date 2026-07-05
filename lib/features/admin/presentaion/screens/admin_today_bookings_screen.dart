@@ -198,14 +198,7 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
                 if (instances.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      'الوقت: ${instances.map((inst) {
-                        final dt = DateTime.parse(inst['start_at'] as String).toLocal();
-                        final dt2 = DateTime.parse(inst['end_at'] as String).toLocal();
-                        return '${format12(dt.hour)} - ${format12(dt2.hour)}';
-                      }).join(', ')}',
-                      style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-                    ),
+                    child: _buildInstancesWidget(instances, id, scheme),
                   ),
                 const SizedBox(height: 8),
                 if (status == 'pending' || status == 'pending_approval')
@@ -234,8 +227,10 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
                       },
                       itemBuilder: (_) => [
                         const PopupMenuItem(value: 'cancel', child: ListTile(leading: Icon(Icons.cancel_outlined, color: Colors.red), title: Text('إلغاء'), dense: true)),
-                        const PopupMenuItem(value: 'shrink', child: ListTile(leading: Icon(Icons.compress), title: Text('تقليص'), dense: true)),
-                        const PopupMenuItem(value: 'reschedule', child: ListTile(leading: Icon(Icons.swap_horiz), title: Text('نقل'), dense: true)),
+                        if (instances.length <= 1)
+                          const PopupMenuItem(value: 'shrink', child: ListTile(leading: Icon(Icons.compress), title: Text('تقليص'), dense: true)),
+                        if (instances.length <= 1)
+                          const PopupMenuItem(value: 'reschedule', child: ListTile(leading: Icon(Icons.swap_horiz), title: Text('نقل'), dense: true)),
                       ],
                     ),
                   ),
@@ -441,6 +436,79 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
       success: (data) {
         _load();
         final msg = data['message'] as String? ?? 'تم نقل الحجز بنجاح';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      },
+      failure: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e)))),
+    );
+  }
+
+  Widget _buildInstancesWidget(List instances, String bookingId, ColorScheme scheme) {
+    final active = instances.where((inst) =>
+      inst['status'] != 'cancelled' && inst['status'] != 'completed'
+    ).toList();
+    if (active.isEmpty) return const SizedBox.shrink();
+    final firstStart = DateTime.parse(active.first['start_at'] as String).toLocal();
+    final firstEnd = DateTime.parse(active.first['end_at'] as String).toLocal();
+    final timeStr = '${format12(firstStart.hour)} - ${format12(firstEnd.hour)}';
+    if (active.length == 1) {
+      return Text('الوقت: $timeStr', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('الوقت: $timeStr', style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+        const SizedBox(height: 4),
+        ...active.map<Widget>((inst) {
+          final dt = DateTime.parse(inst['start_at'] as String).toLocal();
+          final instanceId = inst['id'] as String;
+          final canCancel = dt.isAfter(DateTime.now());
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(dateLabelWithDay(dt), style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                ),
+                if (canCancel)
+                  SizedBox(
+                    width: 28, height: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: Icon(Icons.cancel_outlined, size: 16, color: scheme.error),
+                      tooltip: 'إلغاء هذا الموعد',
+                      onPressed: () => _cancelInstance(bookingId, instanceId, dt),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Future<void> _cancelInstance(String bookingId, String instanceId, DateTime dt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد إلغاء الموعد'),
+        content: Text('هل أنت متأكد من إلغاء موعد ${dateLabelWithDay(dt)}؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('إلغاء الموعد')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    final result = await ref.read(adminRepositoryProvider).cancelBookingInstance(
+      bookingId: bookingId, instanceId: instanceId,
+    );
+    if (!mounted) return;
+    result.when(
+      success: (data) {
+        _load();
+        final msg = data['message'] as String? ?? 'تم إلغاء الموعد';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       },
       failure: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e)))),

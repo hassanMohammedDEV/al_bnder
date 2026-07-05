@@ -296,6 +296,8 @@ BEGIN
                  ELSE 'خصم حجز: ' || v_facility.name END);
   END IF;
 
+  PERFORM notify_telegram_new_booking(v_booking_id);
+
   RETURN jsonb_build_object(
     'success', true,
     'message', CASE WHEN v_confirmed THEN 'تم تأكيد الحجز' ELSE 'الحجز معلق بانتظار تأكيد الإدارة' END,
@@ -328,7 +330,7 @@ LANGUAGE plpgsql
 IMMUTABLE
 AS $$
 DECLARE
-  v_dates        TIMESTAMPTZ[];
+  v_dates        TIMESTAMPTZ[] := ARRAY[]::TIMESTAMPTZ[];
   v_frequency    TEXT;
   v_days_of_week INT[];
   v_end_date     DATE;
@@ -337,7 +339,7 @@ DECLARE
   v_day_of_week  INT;
   v_start_time   TIME;
 BEGIN
-  v_frequency := p_recurring_rule->>'frequency';
+  v_frequency := COALESCE(p_recurring_rule->>'frequency', 'weekly');
   v_days_of_week := ARRAY(SELECT jsonb_array_elements_text(p_recurring_rule->'days_of_week')::INT);
   v_end_date := (p_recurring_rule->>'end_date')::DATE;
   v_count := (p_recurring_rule->>'count')::INT;
@@ -921,6 +923,8 @@ BEGIN
   END IF;
 
   v_confirmed := p_auto_confirm;
+
+  PERFORM notify_telegram_new_booking(v_booking_id);
 
   RETURN jsonb_build_object(
     'success', true,
@@ -3399,8 +3403,9 @@ GRANT EXECUTE ON FUNCTION delete_advertisement TO authenticated;
 --   create extension if not exists pg_net with schema extensions;
 -- Replace TOKEN and CHAT_ID below with your bot credentials.
 -- -------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.notify_telegram_new_booking()
-RETURNS trigger
+DROP FUNCTION IF EXISTS notify_telegram_new_booking() CASCADE;
+CREATE OR REPLACE FUNCTION public.notify_telegram_new_booking(p_booking_id UUID)
+RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, net
@@ -3409,30 +3414,61 @@ DECLARE
   v_token   TEXT := '8746929485:AAFHOmVFVDBrmmHE8WUcJ7xffzRZGz7NLSo';
   v_chat_id TEXT := '8756453222';
   v_body    JSONB;
+  v_text    TEXT;
+  v_booking bookings%ROWTYPE;
+  v_facility_name TEXT;
+  v_group_name TEXT;
+  v_instances_text TEXT;
+  v_rec RECORD;
+  v_count INT;
 BEGIN
-  SELECT jsonb_build_object(
-    'chat_id', v_chat_id,
-    'text',
-      '📌 حجز جديد' || E'\n' ||
-      '━━━━━━━━━━━━' || E'\n' ||
-      '👤 ' || COALESCE(p.full_name, b.guest_name, 'زائر') || E'\n' ||
-      '📞 ' || COALESCE(p.phone, b.guest_phone, '–') || E'\n' ||
-      '🏟️ ' || f.name || ' - ' || fg.name || E'\n' ||
-      '📅 ' || to_char(NEW.start_at AT TIME ZONE 'Asia/Aden', 'YYYY-MM-dd') || E'\n' ||
-      '⏰ ' || to_char(NEW.start_at AT TIME ZONE 'Asia/Aden', 'HH12:MI') || ' ' ||
-              CASE WHEN EXTRACT(HOUR FROM NEW.start_at AT TIME ZONE 'Asia/Aden') < 12 THEN 'ص' ELSE 'م' END || ' → ' ||
-              to_char(NEW.end_at AT TIME ZONE 'Asia/Aden', 'HH12:MI') || ' ' ||
-              CASE WHEN EXTRACT(HOUR FROM NEW.end_at AT TIME ZONE 'Asia/Aden') < 12 THEN 'ص' ELSE 'م' END || E'\n' ||
-      '💰 ' || NEW.price::text || ' ر.ي' || E'\n' ||
-      '💳 مدفوع: ' || COALESCE(b.paid_amount, 0)::text || ' ر.ي' || E'\n' ||
-      '📋 ' || CASE b.is_admin_booking WHEN true THEN 'دفع خارج التطبيق' ELSE b.payment_status END || E'\n' ||
-      '📋 ' || CASE b.is_recurring WHEN true THEN 'متكرر' ELSE 'مرة واحدة' END
-  ) INTO v_body
-  FROM bookings b
-  JOIN facilities f ON f.id = b.facility_id
+  SELECT * INTO v_booking FROM bookings WHERE id = p_booking_id;
+  IF NOT FOUND THEN RETURN; END IF;
+
+  SELECT f.name, fg.name INTO v_facility_name, v_group_name
+  FROM facilities f
   JOIN facility_groups fg ON fg.id = f.group_id
-  LEFT JOIN profiles p ON p.id = b.user_id
-  WHERE b.id = NEW.booking_id;
+  WHERE f.id = v_booking.facility_id;
+
+  -- Build instances list
+  v_instances_text := '';
+  SELECT COUNT(*) INTO v_count FROM booking_instances WHERE booking_id = p_booking_id AND status != 'cancelled';
+
+  FOR v_rec IN
+    SELECT start_at, end_at, price
+    FROM booking_instances
+    WHERE booking_id = p_booking_id AND status != 'cancelled'
+    ORDER BY start_at
+  LOOP
+    v_instances_text := v_instances_text ||
+      '📅 ' || to_char(v_rec.start_at AT TIME ZONE 'Asia/Aden', 'YYYY-MM-dd') || ' ' ||
+      to_char(v_rec.start_at AT TIME ZONE 'Asia/Aden', 'HH12:MI') || ' ' ||
+      CASE WHEN EXTRACT(HOUR FROM v_rec.start_at AT TIME ZONE 'Asia/Aden') < 12 THEN 'ص' ELSE 'م' END || ' → ' ||
+      to_char(v_rec.end_at AT TIME ZONE 'Asia/Aden', 'HH12:MI') || ' ' ||
+      CASE WHEN EXTRACT(HOUR FROM v_rec.end_at AT TIME ZONE 'Asia/Aden') < 12 THEN 'ص' ELSE 'م' END ||
+      ' | ' || v_rec.price::text || ' ر.ي' || E'\n';
+  END LOOP;
+
+  v_text :=
+    '📌 حجز جديد' || E'\n' ||
+    '━━━━━━━━━━━━' || E'\n' ||
+    '👤 ' || COALESCE(
+      (SELECT full_name FROM profiles WHERE id = v_booking.user_id),
+      v_booking.guest_name, 'زائر'
+    ) || E'\n' ||
+    '📞 ' || COALESCE(
+      (SELECT phone FROM profiles WHERE id = v_booking.user_id),
+      v_booking.guest_phone, '–'
+    ) || E'\n' ||
+    '🏟️ ' || v_facility_name || ' - ' || v_group_name || E'\n' ||
+    E'\n' ||
+    v_instances_text || E'\n' ||
+    '💰 الإجمالي: ' || v_booking.total_price::text || ' ر.ي' || E'\n' ||
+    '💳 مدفوع: ' || COALESCE(v_booking.paid_amount, 0)::text || ' ر.ي' || E'\n' ||
+    '📋 ' || CASE v_booking.is_admin_booking WHEN true THEN 'دفع خارج التطبيق' ELSE v_booking.payment_status END || E'\n' ||
+    '📋 ' || CASE v_booking.is_recurring WHEN true THEN 'متكرر (' || v_count || ' مواعيد)' ELSE 'مرة واحدة' END;
+
+  v_body := jsonb_build_object('chat_id', v_chat_id, 'text', v_text);
 
   BEGIN
     PERFORM net.http_post(
@@ -3443,16 +3479,11 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     NULL;
   END;
-
-  RETURN NEW;
 END;
 $$;
 
+-- Drop per-instance trigger (replaced by direct calls in create_booking / admin_create_booking)
 DROP TRIGGER IF EXISTS trg_booking_instance_telegram ON booking_instances;
-CREATE TRIGGER trg_booking_instance_telegram
-  AFTER INSERT ON booking_instances
-  FOR EACH ROW
-  EXECUTE FUNCTION public.notify_telegram_new_booking();
 
 -- ===== RPC: get_facility_analytics =====
 DROP FUNCTION IF EXISTS get_facility_analytics;
@@ -3551,3 +3582,92 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_facility_analytics TO authenticated;
+
+-- ============================================================
+-- إلغاء موعد واحد من حجز متسلسل
+-- ============================================================
+CREATE OR REPLACE FUNCTION cancel_booking_instance(
+  p_booking_id UUID,
+  p_instance_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id        UUID;
+  v_user_role      TEXT;
+  v_user_group     UUID;
+  v_instance       booking_instances%ROWTYPE;
+  v_booking        bookings%ROWTYPE;
+  v_facility       facilities%ROWTYPE;
+  v_remaining      INT;
+  v_new_total      DECIMAL(10,2);
+BEGIN
+  v_user_id := auth.uid();
+  SELECT role, facility_group_id INTO v_user_role, v_user_group
+  FROM profiles WHERE id = v_user_id;
+
+  SELECT * INTO v_instance FROM booking_instances WHERE id = p_instance_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'الموعد غير موجود');
+  END IF;
+
+  SELECT * INTO v_booking FROM bookings WHERE id = p_booking_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'الحجز غير موجود');
+  END IF;
+
+  IF v_user_role != 'facility_admin' THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  SELECT group_id INTO v_facility FROM facilities WHERE id = v_booking.facility_id;
+  IF v_facility.group_id != v_user_group THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح: هذا الحجز ليس لمجموعتك');
+  END IF;
+
+  IF v_instance.status = 'cancelled' THEN
+    RETURN jsonb_build_object('success', false, 'message', 'الموعد ملغي مسبقاً');
+  END IF;
+
+  IF v_instance.start_at <= now() THEN
+    RETURN jsonb_build_object('success', false, 'message', 'لا يمكن إلغاء موعد بعد بدء الوقت');
+  END IF;
+
+  UPDATE booking_instances SET status = 'cancelled'
+  WHERE id = p_instance_id;
+
+  SELECT COALESCE(SUM(price), 0) INTO v_new_total
+  FROM booking_instances
+  WHERE booking_id = p_booking_id AND status NOT IN ('cancelled', 'completed');
+
+  UPDATE bookings SET
+    total_price = v_new_total,
+    updated_at = now()
+  WHERE id = p_booking_id;
+
+  SELECT COUNT(*) INTO v_remaining
+  FROM booking_instances
+  WHERE booking_id = p_booking_id AND status NOT IN ('cancelled', 'completed');
+
+  IF v_remaining = 0 THEN
+    UPDATE bookings SET status = 'cancelled', updated_at = now()
+    WHERE id = p_booking_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم إلغاء الموعد بنجاح',
+    'data', jsonb_build_object(
+      'booking_id', p_booking_id,
+      'instance_id', p_instance_id,
+      'new_total', v_new_total,
+      'remaining', v_remaining
+    )
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION cancel_booking_instance TO authenticated;

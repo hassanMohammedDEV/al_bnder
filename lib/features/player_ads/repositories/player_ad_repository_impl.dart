@@ -32,6 +32,11 @@ class PlayerAdRepositoryImpl implements PlayerAdRepository {
   }
 
   @override
+  Future<Result<void>> createOfficialPlayerAd(Map<String, dynamic> data) {
+    return _apiClient.post('rpc/create_official_player_ad', body: data, parser: (_) {});
+  }
+
+  @override
   Future<Result<void>> deletePlayerAd(String id) {
     return _apiClient.post('rpc/delete_player_ad', body: {
       'p_ad_id': id,

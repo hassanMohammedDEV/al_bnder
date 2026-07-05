@@ -42,6 +42,12 @@ CREATE INDEX IF NOT EXISTS idx_player_ads_status ON player_ads(status);
 CREATE INDEX IF NOT EXISTS idx_player_ad_reports_ad ON player_ad_reports(ad_id);
 
 -- -------------------------------------------------------
+-- 0b. أعمدة الإعلانات الرسمية
+-- -------------------------------------------------------
+ALTER TABLE player_ads ADD COLUMN IF NOT EXISTS is_official BOOLEAN DEFAULT false;
+ALTER TABLE player_ads ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;
+
+-- -------------------------------------------------------
 -- 1. GET PLAYER ADS
 -- POST /rest/v1/rpc/get_player_ads
 -- Body: { "p_facility_group_id": "uuid" }
@@ -75,8 +81,10 @@ BEGIN
     'position', pa.position,
     'notes', pa.notes,
     'status', pa.status,
-    'created_at', pa.created_at
-  ) ORDER BY pa.created_at DESC) INTO v_ads
+    'created_at', pa.created_at,
+    'is_official', pa.is_official,
+    'pinned_at', pa.pinned_at
+  ) ORDER BY pa.pinned_at DESC NULLS LAST, pa.created_at DESC) INTO v_ads
   FROM player_ads pa
   LEFT JOIN profiles u ON u.id = pa.creator_id
   WHERE pa.facility_group_id = p_facility_group_id
@@ -618,6 +626,7 @@ GRANT EXECUTE ON FUNCTION unban_user_from_player_ads TO authenticated;
 GRANT EXECUTE ON FUNCTION get_banned_users TO authenticated;
 GRANT EXECUTE ON FUNCTION search_users_to_ban TO authenticated;
 GRANT EXECUTE ON FUNCTION check_player_ad_banned TO authenticated;
+GRANT EXECUTE ON FUNCTION create_official_player_ad TO authenticated;
 
 -- -------------------------------------------------------
 -- 13. AUTO DELETE EXPIRED PLAYER ADS
@@ -649,6 +658,67 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION auto_delete_expired_player_ads TO authenticated;
+
+-- -------------------------------------------------------
+-- 14. CREATE OFFICIAL PLAYER AD (admin only)
+-- POST /rest/v1/rpc/create_official_player_ad
+-- -------------------------------------------------------
+CREATE OR REPLACE FUNCTION create_official_player_ad(
+  p_facility_group_id UUID,
+  p_type              TEXT,
+  p_days              TEXT[] DEFAULT '{}',
+  p_start_time        TEXT DEFAULT NULL,
+  p_end_time          TEXT DEFAULT NULL,
+  p_facility_id       UUID DEFAULT NULL,
+  p_facility_name     TEXT DEFAULT NULL,
+  p_date              TEXT DEFAULT NULL,
+  p_players_needed    INT DEFAULT NULL,
+  p_position          TEXT DEFAULT NULL,
+  p_notes             TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id   UUID;
+  v_user_role TEXT;
+  v_phone     TEXT;
+  v_ad_id     UUID;
+BEGIN
+  v_user_id := auth.uid();
+  SELECT role, phone INTO v_user_role, v_phone
+  FROM profiles WHERE id = v_user_id;
+
+  IF v_user_role NOT IN ('facility_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  INSERT INTO player_ads (
+    facility_group_id, creator_id, creator_name, creator_phone,
+    type, days, start_time, end_time,
+    facility_id, facility_name, date,
+    players_needed, position, notes,
+    is_official, pinned_at
+  ) VALUES (
+    p_facility_group_id, v_user_id, 'إدارة الملعب', COALESCE(v_phone, ''),
+    p_type, p_days, p_start_time, p_end_time,
+    p_facility_id, p_facility_name, p_date,
+    p_players_needed, p_position, p_notes,
+    true, now()
+  )
+  RETURNING id INTO v_ad_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم نشر الإعلان الرسمي',
+    'data', jsonb_build_object('id', v_ad_id)
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION create_official_player_ad TO authenticated;
 
 -- -------------------------------------------------------
 -- Schedule auto-delete via pg_cron (runs daily at midnight)

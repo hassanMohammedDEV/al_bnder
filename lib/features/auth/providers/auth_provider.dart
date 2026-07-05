@@ -4,12 +4,11 @@ import 'package:app_platform_core/core.dart';
 import 'package:app_platform_state/state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../core/providers/initial_state_provider.dart';
 import '../../../core/providers/token_provider.dart';
 import '../../../features/facilities/providers/facility_provider.dart';
-import '../../../features/facilities/providers/selected_group_provider.dart';
 import '../../../features/wallet/providers/wallet_provider.dart';
 import '../../../features/admin/providers/admin_provider.dart';
 import '../models/auth_state.dart';
@@ -66,8 +65,8 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> _saveSession(AuthState auth) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_session', jsonEncode({
+    const secure = FlutterSecureStorage();
+    await secure.write(key: 'auth_session', value: jsonEncode({
       'name': auth.name,
       'phone': auth.phone,
       'isLoggedIn': auth.isLoggedIn,
@@ -79,8 +78,8 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> _clearSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_session');
+    const secure = FlutterSecureStorage();
+    await secure.delete(key: 'auth_session');
     await ref.read(tokenManagerProvider).clear();
   }
 }

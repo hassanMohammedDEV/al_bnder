@@ -220,22 +220,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   Expanded(
                     child: InkWell(
                       onTap: () => _pickDate(true),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: scheme.surface,
-                          border: Border.all(color: _startDate != null ? scheme.primary : scheme.outlineVariant),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          _startDate != null ? dateLabelWithDay(_startDate!) : 'من',
-                          style: TextStyle(
-                            color: _startDate != null ? scheme.onSurface : scheme.onSurfaceVariant,
-                            fontWeight: _startDate != null ? FontWeight.w600 : FontWeight.normal,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: scheme.surface,
+                            border: Border.all(color: _startDate != null ? scheme.primary : scheme.outlineVariant),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          child: Text(
+                            _startDate != null ? dateLabelWithDay(_startDate!) : 'من',
+                            style: TextStyle(
+                              color: _startDate != null ? scheme.onSurface : scheme.onSurfaceVariant,
+                              fontWeight: _startDate != null ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
                         ),
-                      ),
                     ),
                   ),
                   Padding(
@@ -245,22 +244,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   Expanded(
                     child: InkWell(
                       onTap: () => _pickDate(false),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: scheme.surface,
-                          border: Border.all(color: _endDate != null ? scheme.primary : scheme.outlineVariant),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          _endDate != null ? dateLabelWithDay(_endDate!) : 'إلى',
-                          style: TextStyle(
-                            color: _endDate != null ? scheme.onSurface : scheme.onSurfaceVariant,
-                            fontWeight: _endDate != null ? FontWeight.w600 : FontWeight.normal,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: scheme.surface,
+                            border: Border.all(color: _endDate != null ? scheme.primary : scheme.outlineVariant),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          child: Text(
+                            _endDate != null ? dateLabelWithDay(_endDate!) : 'إلى',
+                            style: TextStyle(
+                              color: _endDate != null ? scheme.onSurface : scheme.onSurfaceVariant,
+                              fontWeight: _endDate != null ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
                         ),
-                      ),
                     ),
                   ),
                   const SizedBox(width: 6),

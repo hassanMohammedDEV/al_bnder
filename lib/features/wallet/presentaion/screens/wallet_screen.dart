@@ -124,7 +124,7 @@ class _WalletBody extends ConsumerWidget {
               ],
             ),
           ),
-          // WhatsApp contact
+          // WhatsApp contact for recharge
           if (phone != null && phone.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -137,7 +137,7 @@ class _WalletBody extends ConsumerWidget {
                 },
                 icon: Icon(Icons.chat, color: const Color(0xFF25D366)),
                 label: Text(
-                  'تواصل واتساب: $phone',
+                  'للشحن تواصل واتساب: $phone',
                   style: TextStyle(color: const Color(0xFF25D366)),
                 ),
                 style: OutlinedButton.styleFrom(

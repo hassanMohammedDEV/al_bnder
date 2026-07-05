@@ -145,6 +145,13 @@ class AdminDashboardScreen extends ConsumerWidget {
           onTap: () => context.push('/admin/ads'),
         ),
         _MenuItem(
+          icon: Icons.verified,
+          title: 'إعلان رسمي من الإدارة',
+          subtitle: 'نشر إعلان رسمي للاعبين مثبت في الأعلى',
+          color: Colors.green,
+          onTap: () => context.push('/admin/create-official-ad'),
+        ),
+        _MenuItem(
           icon: Icons.flag_outlined,
           title: 'البلاغات',
           subtitle: 'إعلانات اللاعبين المبلغ عنها',
@@ -153,8 +160,8 @@ class AdminDashboardScreen extends ConsumerWidget {
         ),
         _MenuItem(
           icon: Icons.search,
-          title: 'بحث بالجوال',
-          subtitle: 'البحث في الحجوزات برقم الجوال',
+          title: 'بحث عن الحجوزات',
+          subtitle: 'البحث في الحجوزات برقم الجوال أو التاريخ',
           color: Colors.teal,
           onTap: () => context.push('/admin/search-bookings'),
         ),

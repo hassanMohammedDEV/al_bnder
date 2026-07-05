@@ -232,10 +232,13 @@ class _PlayerAdCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final isLooking = ad.type == 'looking_team';
-    final isCreator = ad.creatorId == ref.read(authStateProvider).userId;
+    final auth = ref.read(authStateProvider);
+    final isCreator = ad.creatorId == auth.userId;
+    final isAdmin = auth.role == 'facility_admin' || auth.role == 'super_admin';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
+      color: ad.isOfficial ? scheme.primaryContainer.withValues(alpha: 0.4) : null,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
@@ -263,6 +266,17 @@ class _PlayerAdCard extends ConsumerWidget {
                 Text(_timeAgo(ad.createdAt), style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
               ],
             ),
+            if (ad.isOfficial)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.verified, size: 14, color: Colors.green),
+                    const SizedBox(width: 4),
+                    Text('إدارة الملعب', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
             if (!isLooking && ad.playersNeeded != null) ...[
               const SizedBox(height: 4),
               Container(
@@ -311,8 +325,16 @@ class _PlayerAdCard extends ConsumerWidget {
                   _ActionBtn(icon: Icons.edit_outlined, color: scheme.primary, onTap: () => _editAd(context, ref)),
                   const SizedBox(width: 4),
                   _ActionBtn(icon: Icons.delete_outline, color: scheme.error, onTap: () => _confirmDelete(context, ref)),
-                ],
-                if (!isCreator) ...[
+                ] else if (ad.isOfficial) ...[
+                  if (isAdmin)
+                    _ActionBtn(icon: Icons.delete_outline, color: scheme.error, onTap: () => _confirmDelete(context, ref)),
+                ] else if (isAdmin) ...[
+                  _ActionBtn(icon: Icons.delete_outline, color: scheme.error, onTap: () => _confirmDelete(context, ref)),
+                  const SizedBox(width: 6),
+                  _PhoneBtn(phone: ad.creatorPhone),
+                  const SizedBox(width: 6),
+                  _WhatsAppBtn(phone: ad.creatorPhone),
+                ] else ...[
                   _ActionBtn(icon: Icons.flag_outlined, color: scheme.onSurfaceVariant, onTap: () => _reportAd(context, ref)),
                   const SizedBox(width: 6),
                   _PhoneBtn(phone: ad.creatorPhone),

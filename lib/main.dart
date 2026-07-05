@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,9 +15,10 @@ import 'features/auth/models/auth_state.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ar');
-  final prefs = await SharedPreferences.getInstance();
-  final savedSession = prefs.getString('auth_session');
-  final savedToken = prefs.getString('auth_token');
+
+  final secure = const FlutterSecureStorage();
+  final savedSession = await secure.read(key: 'auth_session');
+  final savedToken = await secure.read(key: 'auth_token');
 
   AuthState? initialAuth;
   if (savedSession != null) {
@@ -32,6 +34,8 @@ void main() async {
     );
   }
 
+  final prefs = await SharedPreferences.getInstance();
+
   runApp(
     ProviderScope(
       overrides: [
@@ -39,7 +43,7 @@ void main() async {
         if (savedToken != null && savedToken.isNotEmpty)
           tokenManagerProvider.overrideWith((ref) {
             final tm = TokenManager();
-            tm.setToken(savedToken);
+            tm.setLoadedToken(savedToken);
             return tm;
           }),
         sharedPreferencesProvider.overrideWithValue(prefs),

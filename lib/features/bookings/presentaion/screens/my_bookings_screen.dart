@@ -215,12 +215,16 @@ class _BookingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final instance = booking.instances?.isNotEmpty == true ? booking.instances!.first : null;
-    final bookingDate = instance != null
-        ? DateTime.parse(instance.startAt).toLocal()
+    final activeInstances = booking.instances
+        ?.where((i) => i.status != 'cancelled' && i.status != 'completed')
+        .toList() ?? [];
+    final isRecurring = activeInstances.length > 1;
+    final firstInstance = activeInstances.isNotEmpty ? activeInstances.first : booking.instances?.firstOrNull;
+    final bookingDate = firstInstance != null
+        ? DateTime.parse(firstInstance.startAt).toLocal()
         : null;
-    final bookingEnd = instance != null
-        ? DateTime.parse(instance.endAt).toLocal()
+    final bookingEnd = firstInstance != null
+        ? DateTime.parse(firstInstance.endAt).toLocal()
         : null;
 
     String fmt12(DateTime dt) {
@@ -271,10 +275,22 @@ class _BookingCard extends StatelessWidget {
                 children: [
                   Icon(Icons.calendar_today, size: 14, color: scheme.onSurfaceVariant),
                   const SizedBox(width: 6),
-                  Text(
-                    bookingDate != null ? dateLabelWithDay(bookingDate) : '--',
-                    style: TextStyle(color: scheme.onSurfaceVariant),
-                  ),
+                  if (isRecurring)
+                    Expanded(
+                      child: Wrap(
+                        spacing: 4,
+                        children: activeInstances.map((i) {
+                          final dt = DateTime.parse(i.startAt).toLocal();
+                          return Text(dateLabelWithDay(dt),
+                            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant));
+                        }).toList(),
+                      ),
+                    )
+                  else
+                    Text(
+                      bookingDate != null ? dateLabelWithDay(bookingDate) : '--',
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
                   const SizedBox(width: 16),
                   Icon(Icons.payments, size: 14, color: scheme.onSurfaceVariant),
                   const SizedBox(width: 6),
@@ -294,6 +310,21 @@ class _BookingCard extends StatelessWidget {
                         style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                       ),
                     ],
+                  ),
+                ),
+              if (isRecurring)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: activeInstances.map((i) {
+                      final dt = DateTime.parse(i.startAt).toLocal();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text('• ${dateLabelWithDay(dt)}',
+                          style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+                      );
+                    }).toList(),
                   ),
                 ),
               Padding(

@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../announcements/providers/announcement_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../../../facilities/providers/facility_provider.dart';
+import '../../../facilities/providers/selected_group_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -17,6 +19,11 @@ class SettingsScreen extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final auth = ref.watch(authStateProvider);
     final isAdmin = auth.role == 'facility_admin' || auth.role == 'super_admin';
+    final groupsState = ref.watch(facilityGroupsProvider);
+    final selectedGroupId = ref.watch(selectedGroupProvider);
+    final groups = groupsState.data ?? [];
+    final selectedGroup = groups.where((g) => g.id == selectedGroupId).firstOrNull;
+    final managerPhone = selectedGroup?.phone;
 
     Widget content = ListView(
       padding: const EdgeInsets.all(16),
@@ -188,6 +195,32 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: Text('1.0.0', style: TextStyle(color: scheme.onSurfaceVariant)),
               ),
               const Divider(height: 1),
+              if (managerPhone != null && managerPhone.isNotEmpty)
+                ListTile(
+                  leading: Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF25D366).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.admin_panel_settings, color: Color(0xFF25D366)),
+                  ),
+                  title: const Text('تواصل مع مدير الملعب'),
+                  subtitle: const Text('عبر واتساب لشحن المحفظة والاستفسار'),
+                  trailing: const Icon(Icons.arrow_forward_ios),
+                  onTap: () async {
+                    final digits = managerPhone.replaceAll(RegExp(r'\D'), '');
+                    final url = Uri.parse(digits.startsWith('0')
+                        ? 'https://wa.me/966${digits.substring(1)}'
+                        : digits.startsWith('966')
+                            ? 'https://wa.me/$digits'
+                            : 'https://wa.me/$digits');
+                    try {
+                      await launchUrl(url, mode: LaunchMode.externalApplication);
+                    } catch (_) {}
+                  },
+                ),
+              const Divider(height: 1),
               ListTile(
                 leading: Container(
                   width: 40, height: 40,
@@ -198,7 +231,7 @@ class SettingsScreen extends ConsumerWidget {
                   child: const Icon(Icons.chat, color: Color(0xFF25D366)),
                 ),
                 title: const Text('تواصل مع المطور'),
-                subtitle: const Text('عبر واتساب'),
+                subtitle: const Text('للإبلاغ عن الأخطاء أو الاقتراحات عبر واتساب'),
                 trailing: const Icon(Icons.arrow_forward_ios),
                 onTap: () async {
                   final url = Uri.parse('https://wa.me/967730845718');

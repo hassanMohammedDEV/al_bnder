@@ -16,6 +16,8 @@ class PlayerAd {
   final String? notes;
   final String status;
   final String createdAt;
+  final bool isOfficial;
+  final String? pinnedAt;
 
   const PlayerAd({
     required this.id,
@@ -35,6 +37,8 @@ class PlayerAd {
     this.notes,
     this.status = 'active',
     required this.createdAt,
+    this.isOfficial = false,
+    this.pinnedAt,
   });
 
   factory PlayerAd.fromMap(Map<String, dynamic> map) {
@@ -56,6 +60,8 @@ class PlayerAd {
       notes: map['notes'] as String?,
       status: map['status'] as String? ?? 'active',
       createdAt: map['created_at'] as String,
+      isOfficial: map['is_official'] as bool? ?? false,
+      pinnedAt: map['pinned_at'] as String?,
     );
   }
 }
