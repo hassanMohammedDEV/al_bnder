@@ -142,11 +142,11 @@ END;
 $$;
 
 -- 5. دالة حذف الحساب
-CREATE OR REPLACE FUNCTION delete_my_account()
+CREATE OR REPLACE FUNCTION delete_my_account(p_dummy TEXT DEFAULT '')
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, auth
 AS $$
 DECLARE
   v_user_id UUID;
@@ -159,10 +159,20 @@ BEGIN
   DELETE FROM wallets WHERE user_id = v_user_id;
   DELETE FROM bookings WHERE user_id = v_user_id;
   DELETE FROM player_ads WHERE creator_id = v_user_id;
-  DELETE FROM reports WHERE reporter_id = v_user_id;
-  DELETE FROM announcements WHERE sender_id = v_user_id;
-  DELETE FROM notifications WHERE user_id = v_user_id;
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'announcement_reads') THEN
+    DELETE FROM announcement_reads WHERE user_id = v_user_id;
+  END IF;
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'reports') THEN
+    DELETE FROM reports WHERE reporter_id = v_user_id;
+  END IF;
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'announcements') THEN
+    DELETE FROM announcements WHERE sender_id = v_user_id;
+  END IF;
+  IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'notifications') THEN
+    DELETE FROM notifications WHERE user_id = v_user_id;
+  END IF;
   DELETE FROM profiles WHERE id = v_user_id;
+  DELETE FROM auth.users WHERE id = v_user_id;
 
   RETURN jsonb_build_object('success', true, 'message', 'تم حذف الحساب');
 END;
@@ -1087,3 +1097,234 @@ $$;
 
 GRANT EXECUTE ON FUNCTION create_booking TO authenticated;
 GRANT EXECUTE ON FUNCTION admin_create_booking TO authenticated;
+
+-- 18. استعادة كلمة السر عبر SMS
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
+CREATE OR REPLACE FUNCTION forgot_password(p_phone TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, extensions
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_new_password TEXT;
+  v_sms_token TEXT;
+BEGIN
+  SELECT id INTO v_user_id FROM profiles WHERE phone = p_phone;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'رقم الجوال غير مسجل');
+  END IF;
+
+  v_new_password := upper(substr(md5(gen_random_uuid()::text || clock_timestamp()::text), 1, 8));
+
+  UPDATE auth.users
+  SET encrypted_password = extensions.crypt(v_new_password, extensions.gen_salt('bf'))
+  WHERE id = v_user_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'المستخدم غير موجود في نظام التوثيق');
+  END IF;
+
+  v_sms_token := 'f553Lv0dTZGY3qwFRAdUan:APA91bHdlPb8gXlxRvEXY-pQWOhfnsheKK7qdMmD1Nnb6LV9Yhl8VbixYserGbOgRBn3AA9rnooVfP-BNi4TEVD8ssAWiQHQTyHX4J4iN7fpJT7UKucCxQA';
+
+  PERFORM net.http_post(
+    url := 'https://www.traccar.org/sms/',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', v_sms_token
+    ),
+    body := jsonb_build_object(
+      'to', p_phone,
+      'message', 'كلمة المرور الجديدة: ' || v_new_password
+    )
+  );
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم إرسال كلمة السر الجديدة');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION forgot_password TO anon, authenticated;
+
+-- 19. تحديث الملف الشخصي (الاسم)
+CREATE OR REPLACE FUNCTION update_my_profile(p_full_name TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  UPDATE profiles SET full_name = p_full_name, updated_at = now()
+  WHERE id = v_user_id;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم تحديث الملف الشخصي');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION update_my_profile TO authenticated;
+
+-- 20. تغيير كلمة السر (للمستخدم المسجل دخوله)
+CREATE OR REPLACE FUNCTION change_my_password(p_new_password TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, extensions
+AS $$
+DECLARE
+  v_user_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  UPDATE auth.users
+  SET encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf'))
+  WHERE id = v_user_id;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم تغيير كلمة السر');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION change_my_password TO authenticated;
+
+-- 21. إعادة تعيين كلمة سر مستخدم (للمدير فقط) وإرجاعها
+CREATE OR REPLACE FUNCTION admin_reset_user_password(p_phone TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, extensions
+AS $$
+DECLARE
+  v_admin_id UUID;
+  v_admin_role TEXT;
+  v_user_id UUID;
+  v_new_password TEXT;
+BEGIN
+  v_admin_id := auth.uid();
+  SELECT role INTO v_admin_role FROM profiles WHERE id = v_admin_id;
+
+  IF v_admin_role NOT IN ('facility_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+
+  SELECT id INTO v_user_id FROM profiles WHERE phone = p_phone;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'رقم الجوال غير مسجل');
+  END IF;
+
+  v_new_password := upper(substr(md5(gen_random_uuid()::text || clock_timestamp()::text), 1, 8));
+
+  UPDATE auth.users
+  SET encrypted_password = extensions.crypt(v_new_password, extensions.gen_salt('bf'))
+  WHERE id = v_user_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم إعادة تعيين كلمة السر',
+    'data', jsonb_build_object('new_password', v_new_password)
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_reset_user_password TO authenticated;
+
+-- ============================================================
+-- 18. OTP Verification
+-- ============================================================
+
+-- جدول رموز التحقق
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  phone TEXT NOT NULL,
+  code TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+-- إضافة عمود phone_verified إلى profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT false;
+
+-- تعيين جميع المستخدمين الحاليين كمتحقق (للهجرة من قبل الميزة)
+UPDATE profiles SET phone_verified = true WHERE phone_verified IS NULL OR phone_verified = false;
+
+-- إنشاء رمز تحقق وإرساله عبر SMS
+CREATE OR REPLACE FUNCTION generate_otp(
+  p_phone   TEXT,
+  p_purpose TEXT DEFAULT 'registration'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, extensions
+AS $$
+DECLARE
+  v_code  TEXT;
+  v_token TEXT := 'f553Lv0dTZGY3qwFRAdUan:APA91bHdlPb8gXlxRvEXY-pQWOhfnsheKK7qdMmD1Nnb6LV9Yhl8VbixYserGbOgRBn3AA9rnooVfP-BNi4TEVD8ssAWiQHQTyHX4J4iN7fpJT7UKucCxQA';
+BEGIN
+  v_code := LPAD(floor(random() * 1000000)::TEXT, 6, '0');
+
+  DELETE FROM otp_codes WHERE phone = p_phone;
+
+  INSERT INTO otp_codes (phone, code, expires_at)
+  VALUES (p_phone, v_code, now() + interval '5 minutes');
+
+  PERFORM net.http_post(
+    url     := 'https://www.traccar.org/sms/',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', v_token
+    ),
+    body := jsonb_build_object(
+      'to',      p_phone,
+      'message', 'رمز التحقق الخاص بك في ملاعب البندر: ' || v_code
+    )
+  );
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم إرسال رمز التحقق');
+END;
+$$;
+
+-- التحقق من رمز OTP
+CREATE OR REPLACE FUNCTION verify_otp(
+  p_phone   TEXT,
+  p_code    TEXT,
+  p_purpose TEXT DEFAULT 'registration'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_valid BOOLEAN;
+BEGIN
+  SELECT EXISTS(
+    SELECT 1 FROM otp_codes
+    WHERE phone = p_phone
+      AND code = p_code
+      AND expires_at > now()
+  ) INTO v_valid;
+
+  IF v_valid THEN
+    DELETE FROM otp_codes WHERE phone = p_phone;
+    UPDATE profiles SET phone_verified = true WHERE phone = p_phone;
+    RETURN jsonb_build_object('success', true, 'message', 'تم التحقق بنجاح');
+  ELSE
+    RETURN jsonb_build_object('success', false, 'message', 'رمز غير صحيح أو منتهي الصلاحية');
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION generate_otp TO authenticated;
+GRANT EXECUTE ON FUNCTION verify_otp TO authenticated;
+
+NOTIFY pgrst, 'reload schema';

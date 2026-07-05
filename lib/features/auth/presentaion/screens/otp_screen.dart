@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,10 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
 import '../../../../core/helpers/error_helper.dart';
 
-/// OTP bypassed — kept for reference only.
 class OtpScreen extends ConsumerStatefulWidget {
-  final String phone;
-  const OtpScreen({super.key, required this.phone});
+  const OtpScreen({super.key});
 
   @override
   ConsumerState<OtpScreen> createState() => _OtpScreenState();
@@ -16,15 +16,54 @@ class OtpScreen extends ConsumerStatefulWidget {
 
 class _OtpScreenState extends ConsumerState<OtpScreen> {
   final _codeController = TextEditingController();
+  Timer? _timer;
   bool _loading = false;
+  static const _resendWait = 60;
+  int _remaining = 0;
+  String get _phone => ref.read(authStateProvider).phone;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+    Future.microtask(() {
+      if (_phone.isNotEmpty) _sendOtp();
+    });
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _remaining = _resendWait;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_remaining <= 1) {
+        setState(() => _remaining = 0);
+        timer.cancel();
+        return;
+      }
+      setState(() => _remaining--);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _codeController.dispose();
+    super.dispose();
+  }
 
   Future<void> _sendOtp() async {
+    final phone = _phone;
+    if (phone.isEmpty) return;
     setState(() => _loading = true);
-    final result = await ref.read(authServiceProvider).generateOtp(widget.phone);
+    final result = await ref.read(authServiceProvider).generateOtp(phone);
     if (!mounted) return;
     setState(() => _loading = false);
     result.when(
-      success: (_) {},
+      success: (_) => _startTimer(),
       failure: (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(translateError(e))),
@@ -35,9 +74,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
   Future<void> _verify() async {
     if (_codeController.text.length != 6) return;
+    final phone = _phone;
+    if (phone.isEmpty) return;
     setState(() => _loading = true);
     final result = await ref.read(authServiceProvider).verifyOtp(
-      widget.phone,
+      phone,
       _codeController.text,
     );
     if (!mounted) return;
@@ -45,7 +86,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
     result.when(
       success: (_) {
-        ref.read(authStateProvider.notifier).updatePhone(widget.phone);
+        ref.read(authStateProvider.notifier).setPhoneVerified(true);
         context.go('/home');
       },
       failure: (e) {
@@ -54,12 +95,6 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
         );
       },
     );
-  }
-
-  @override
-  void dispose() {
-    _codeController.dispose();
-    super.dispose();
   }
 
   @override
@@ -82,7 +117,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                 color: scheme.onSurface,
               )),
               const SizedBox(height: 8),
-              Text('إلى رقم ${widget.phone}', style: TextStyle(
+              Text('إلى رقم $_phone', style: TextStyle(
                 fontSize: 14,
                 color: scheme.onSurfaceVariant,
               )),
@@ -116,8 +151,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                 const CircularProgressIndicator()
               else
                 TextButton(
-                  onPressed: _loading ? null : _sendOtp,
-                  child: const Text('إعادة إرسال الرمز'),
+                  onPressed: _remaining == 0 ? _sendOtp : null,
+                  child: Text(_remaining > 0
+                      ? 'إعادة إرسال الرمز (${_remaining}s)'
+                      : 'إعادة إرسال الرمز'),
                 ),
             ],
           ),

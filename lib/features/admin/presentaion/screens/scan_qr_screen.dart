@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -14,23 +17,60 @@ class ScanQrScreen extends ConsumerStatefulWidget {
 }
 
 class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
-  int _scannerKey = 0;
   late final MobileScannerController _controller;
-  bool _torch = false;
+  final _picker = ImagePicker();
+  int _scannerKey = 0;
   bool _scanning = true;
+  bool _torch = false;
+  bool _cameraFailed = false;
+  bool _analyzing = false;
   Map<String, dynamic>? _bookingData;
   String? _errorMsg;
+  int _errorCount = 0;
+  Timer? _retryTimer;
 
   @override
   void initState() {
     super.initState();
-    _controller = MobileScannerController();
+    _controller = MobileScannerController(
+      autoStart: false,
+      cameraResolution: const Size(640, 480),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((Duration _) => _startCamera());
   }
 
   @override
   void dispose() {
+    _retryTimer?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _startCamera() async {
+    if (!mounted) return;
+    try {
+      await _controller.start();
+      if (mounted) {
+        _errorCount = 0;
+        setState(() => _cameraFailed = false);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('QR Scanner start error: $e');
+      final ec = _errorCount;
+      if (ec < 3) {
+        _errorCount = ec + 1;
+        _retryTimer?.cancel();
+        _retryTimer = Timer(Duration(seconds: ec == 0 ? 1 : 2), () {
+          if (mounted) _startCamera();
+        });
+      } else {
+        setState(() {
+          _cameraFailed = true;
+          _scanning = false;
+        });
+      }
+    }
   }
 
   void _onDetect(BarcodeCapture capture) {
@@ -38,14 +78,46 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
     final barcode = capture.barcodes.firstOrNull;
     final raw = barcode?.rawValue;
     if (raw == null || raw.isEmpty) return;
-
     _scanning = false;
     _lookup(raw);
   }
 
+  Future<void> _pickAndAnalyze() async {
+    if (_analyzing) return;
+    setState(() {
+      _analyzing = true;
+      _errorMsg = null;
+    });
+
+    try {
+      final xfile = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1920,
+      );
+      if (xfile == null || !mounted) return;
+
+      final result = await _controller.analyzeImage(xfile.path);
+      if (!mounted) return;
+
+      if (result != null && result.barcodes.isNotEmpty) {
+        final token = result.barcodes.first.rawValue;
+        if (token != null && token.isNotEmpty) {
+          _lookup(token);
+          return;
+        }
+      }
+      setState(() => _errorMsg = 'لم يتم العثور على QR');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMsg = 'فشل التحليل: $e');
+    } finally {
+      if (mounted) setState(() => _analyzing = false);
+    }
+  }
+
   Future<void> _lookup(String qrToken) async {
     final result = await ref.read(adminRepositoryProvider).getBookingByQrToken(qrToken);
-
     if (!mounted) return;
     result.when(
       success: (data) => setState(() {
@@ -56,29 +128,37 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
       failure: (e) => setState(() {
         _errorMsg = translateError(e);
         _bookingData = null;
-        _scanning = true;
       }),
     );
   }
 
   void _reset() {
-    _controller.dispose();
+    _retryTimer?.cancel();
     setState(() {
-      _controller = MobileScannerController();
       _scannerKey++;
       _bookingData = null;
       _errorMsg = null;
       _scanning = true;
+      _torch = false;
+      _cameraFailed = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((Duration _) {
+      _errorCount = 0;
+      _startCamera();
     });
   }
 
   void _retry() {
-    _controller.dispose();
+    _retryTimer?.cancel();
     setState(() {
-      _controller = MobileScannerController();
       _scannerKey++;
       _errorMsg = null;
       _scanning = true;
+      _cameraFailed = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((Duration _) {
+      _errorCount = 0;
+      _startCamera();
     });
   }
 
@@ -100,72 +180,147 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
       ),
       body: _bookingData != null
           ? _buildResult(scheme)
-          : Stack(
-              children: [
-                MobileScanner(
-                  key: ValueKey(_scannerKey),
-                  controller: _controller,
-                  onDetect: _onDetect,
-                  errorBuilder: (context, error) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.error_outline, size: 48, color: scheme.error),
-                          const SizedBox(height: 12),
-                          const Text('تعذر الوصول إلى الكاميرا'),
-                          const SizedBox(height: 16),
-                          FilledButton(
-                            onPressed: _retry,
-                            child: const Text('إعادة المحاولة'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+          : _cameraFailed ? _buildFallback(scheme) : _buildCamera(scheme),
+    );
+  }
+
+  Widget _buildCamera(ColorScheme scheme) {
+    return Stack(
+      children: [
+        MobileScanner(
+          key: ValueKey(_scannerKey),
+          controller: _controller,
+          onDetect: _onDetect,
+          errorBuilder: (context, error) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline, size: 48, color: scheme.error),
+                  const SizedBox(height: 12),
+                  Text(error.errorCode.message,
+                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  if (error.errorDetails?.message != null)
+                    Text('${error.errorDetails!.message}',
+                      style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11)),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _retry,
+                    child: const Text('إعادة المحاولة'),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        if (_scanning)
+          Positioned(
+            bottom: 32,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: IconButton(
+                icon: Icon(
+                  _torch ? Icons.flash_on : Icons.flash_off,
+                  color: Colors.white,
+                  size: 32,
                 ),
-                if (_errorMsg != null)
-                  Positioned(
-                    top: 16,
-                    left: 16,
-                    right: 16,
-                    child: Material(
-                      elevation: 4,
-                      borderRadius: BorderRadius.circular(12),
-                      color: scheme.errorContainer,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          children: [
-                            Icon(Icons.error_outline, color: scheme.error, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(_errorMsg!, style: TextStyle(color: scheme.error))),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                if (_scanning)
-                  Positioned(
-                    bottom: 32,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: IconButton(
-                        icon: Icon(
-                          _torch ? Icons.flash_on : Icons.flash_off,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                        onPressed: () {
-                          _controller.toggleTorch();
-                          setState(() => _torch = !_torch);
-                        },
-                      ),
-                    ),
-                  ),
-              ],
+                onPressed: () {
+                  _controller.toggleTorch();
+                  setState(() => _torch = !_torch);
+                },
+              ),
             ),
+          ),
+        if (_errorMsg != null)
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: Material(
+              elevation: 4,
+              borderRadius: BorderRadius.circular(12),
+              color: scheme.errorContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: scheme.error, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_errorMsg!, style: TextStyle(color: scheme.error))),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildFallback(ColorScheme scheme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.qr_code_scanner, size: 96, color: scheme.primary),
+            const SizedBox(height: 24),
+            Text('صور رمز QR من الشاشة',
+              style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text('التقط صورة لرمز QR الموجود على شاشة المستخدم',
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+              textAlign: TextAlign.center),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _analyzing ? null : _pickAndAnalyze,
+                icon: _analyzing
+                    ? const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.camera_alt, size: 28),
+                label: Text(
+                  _analyzing ? 'جاري التحليل...' : 'تصوير QR',
+                  style: const TextStyle(fontSize: 16),
+                ),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+            if (_errorMsg != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: scheme.error, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_errorMsg!,
+                      style: TextStyle(color: scheme.error))),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 24),
+            TextButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('إعادة محاولة الكاميرا المباشرة'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

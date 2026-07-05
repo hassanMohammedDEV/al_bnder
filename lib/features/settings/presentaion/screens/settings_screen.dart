@@ -64,6 +64,10 @@ class SettingsScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    IconButton(
+                      icon: Icon(Icons.edit_outlined, color: scheme.primary),
+                      onPressed: () => context.push('/edit-profile'),
+                    ),
                   ],
                 ),
               ),

@@ -21,7 +21,7 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
   String? _selectedFacilityId;
   String? _selectedFacilityName;
   String? _date;
-  int? _playersNeeded;
+  int _playersNeeded = 1;
   String? _position;
   final _notesCtrl = TextEditingController();
   bool _isSubmitting = false;
@@ -70,7 +70,7 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
       context: context,
       initialDate: DateTime.now().add(const Duration(days: 1)),
       firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 60)),
+      lastDate: DateTime.now().add(const Duration(days: 3)),
     );
     if (picked != null) {
       setState(() => _date = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}');
@@ -96,6 +96,20 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
     if (_notesCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('اكتب نص الإعلان الرسمي')),
+      );
+      return;
+    }
+
+    if (_date == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('اختر التاريخ')),
+      );
+      return;
+    }
+
+    if (_type == 'nakusna' && _playersNeeded < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يجب أن يكون عدد اللاعبين الناقصين 1 على الأقل')),
       );
       return;
     }
@@ -214,6 +228,28 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
               ),
               const SizedBox(height: 20),
 
+              // Date picker
+              Text('تاريخ اللعب', style: TextStyle(fontWeight: FontWeight.w600, color: scheme.onSurface)),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: _pickDate,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: scheme.outlineVariant),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_today, size: 18, color: scheme.onSurfaceVariant),
+                      const SizedBox(width: 12),
+                      Text(_date ?? 'اختر التاريخ', style: TextStyle(color: _date != null ? scheme.onSurface : scheme.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
               Text('المركز (اختياري)', style: TextStyle(fontWeight: FontWeight.w600, color: scheme.onSurface)),
               const SizedBox(height: 8),
               Wrap(
@@ -252,15 +288,15 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
               Row(
                 children: [
                   IconButton(
-                    onPressed: (_playersNeeded ?? 0) > 1
-                        ? () => setState(() => _playersNeeded = _playersNeeded! - 1)
+                    onPressed: _playersNeeded > 1
+                        ? () => setState(() => _playersNeeded = _playersNeeded - 1)
                         : null,
                     icon: const Icon(Icons.remove_circle_outline),
                   ),
-                  Text('${_playersNeeded ?? 0}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  Text('$_playersNeeded', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   IconButton(
-                    onPressed: (_playersNeeded ?? 0) < 20
-                        ? () => setState(() => _playersNeeded = (_playersNeeded ?? 0) + 1)
+                    onPressed: _playersNeeded < 20
+                        ? () => setState(() => _playersNeeded = _playersNeeded + 1)
                         : null,
                     icon: const Icon(Icons.add_circle_outline),
                   ),

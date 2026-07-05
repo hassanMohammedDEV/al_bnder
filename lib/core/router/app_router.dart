@@ -4,9 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentaion/screens/login_screen.dart';
 import '../../features/auth/presentaion/screens/register_screen.dart';
+import '../../features/auth/presentaion/screens/edit_profile_screen.dart';
+import '../../features/auth/presentaion/screens/otp_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
-// OTP bypassed
-// import '../../features/auth/presentaion/screens/otp_screen.dart';
 import '../../features/facilities/models/facility.dart';
 import '../../features/facilities/presentaion/screens/home_screen.dart';
 import '../../features/facilities/presentaion/screens/facilities_screen.dart';
@@ -46,18 +46,23 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final auth = ref.read(authStateProvider);
       final isLoggedIn = auth.isLoggedIn;
-      final profileLoaded = auth.isProfileLoaded;
       final location = state.matchedLocation;
       final isAuthRoute = location == '/login' || location == '/register';
 
-      if (isLoggedIn && profileLoaded && isAuthRoute) return '/home';
+      if (isLoggedIn) {
+        if (auth.needsPhoneVerification && location != '/verify-otp') return '/verify-otp';
+        if (isAuthRoute) return '/home';
+      }
       if (!isLoggedIn && !isAuthRoute && location != '/register') return '/login';
       return null;
     },
     routes: [
       GoRoute(path: '/login', pageBuilder: (_, __) => const CupertinoPage(child: LoginScreen())),
       GoRoute(path: '/register', pageBuilder: (_, __) => const CupertinoPage(child: RegisterScreen())),
-      // /verify-otp bypassed
+      GoRoute(
+        path: '/verify-otp',
+        pageBuilder: (_, __) => const CupertinoPage(child: OtpScreen()),
+      ),
       GoRoute(path: '/home', pageBuilder: (_, __) => const CupertinoPage(child: HomeScreen())),
       GoRoute(
         path: '/facilities/:groupId',
@@ -176,6 +181,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/admin/banned-users', pageBuilder: (_, __) => const CupertinoPage(child: BannedUsersScreen())),
       GoRoute(path: '/privacy', pageBuilder: (_, __) => const CupertinoPage(child: PrivacyPolicyScreen())),
       GoRoute(path: '/terms', pageBuilder: (_, __) => const CupertinoPage(child: TermsScreen())),
+      GoRoute(path: '/edit-profile', pageBuilder: (_, __) => const CupertinoPage(child: EditProfileScreen())),
     ],
   );
 

@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:app_platform_core/core.dart';
 import 'package:app_platform_network/network.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../core/constants.dart';
 import '../../../core/providers/api_client_provider.dart';
@@ -54,8 +58,31 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<Result<void>> deleteAccount() {
-    return _apiClient.post('rpc/delete_my_account', body: {}, parser: (_) {});
+  Future<Result<void>> deleteAccount() async {
+    final token = _ref.read(tokenManagerProvider).token;
+    final client = http.Client();
+    try {
+      final uri = Uri.parse('${supabaseRestUrl}rpc/delete_my_account');
+      debugPrint('DELETE URI: $uri');
+      final response = await client.post(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'p_dummy': ''}),
+      );
+      debugPrint('DELETE status: ${response.statusCode}');
+      debugPrint('DELETE body: ${response.body}');
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return Success(null);
+      }
+      return Failure(NotFoundError());
+    } finally {
+      client.close();
+    }
   }
 
   @override
@@ -80,6 +107,33 @@ class AuthRepositoryImpl implements AuthRepository {
         userId: map['user']?['id'],
         isLoggedIn: true,
       );
+    });
+  }
+
+  @override
+  Future<Result<Map<String, dynamic>>> forgotPassword(String phone) {
+    return _apiClient.post('rpc/forgot_password', body: {
+      'p_phone': phone,
+    }, parser: (json) {
+      return (json as Map<String, dynamic>);
+    });
+  }
+
+  @override
+  Future<Result<Map<String, dynamic>>> updateName(String name) {
+    return _apiClient.post('rpc/update_my_profile', body: {
+      'p_full_name': name,
+    }, parser: (json) {
+      return (json as Map<String, dynamic>);
+    });
+  }
+
+  @override
+  Future<Result<Map<String, dynamic>>> changePassword(String newPassword) {
+    return _apiClient.post('rpc/change_my_password', body: {
+      'p_new_password': newPassword,
+    }, parser: (json) {
+      return (json as Map<String, dynamic>);
     });
   }
 

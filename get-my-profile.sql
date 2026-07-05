@@ -33,7 +33,8 @@ BEGIN
       'full_name', v_profile.full_name,
       'role', v_profile.role,
       'facility_group_id', v_profile.facility_group_id,
-      'is_active', v_profile.is_active
+      'is_active', v_profile.is_active,
+      'phone_verified', v_profile.phone_verified
     )
   );
 END;

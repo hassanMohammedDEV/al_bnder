@@ -1,7 +1,7 @@
 name: al_bndr
 description: "Al Bndr - Booking Management System"
 publish_to: 'none'
-version: 1.0.0+16
+version: 1.0.0+23
 
 environment:
   sdk: ^3.12.1
@@ -37,6 +37,7 @@ dependencies:
       path: packages/ui
   shared_preferences: ^2.5.5
   mobile_scanner: ^7.2.0
+  image_picker: ^1.1.2
   qr_flutter: ^4.1.0
   url_launcher: ^6.3.1
   flutter_secure_storage: ^9.2.4

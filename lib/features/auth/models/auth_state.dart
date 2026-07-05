@@ -4,6 +4,8 @@ class AuthState {
   final String password;
   final bool isLoggedIn;
   final bool isProfileLoaded;
+  final bool phoneVerified;
+  final bool needsPhoneVerification;
   final String? userId;
   final String? role;
   final String? facilityGroupId;
@@ -14,6 +16,8 @@ class AuthState {
     this.password = '',
     this.isLoggedIn = false,
     this.isProfileLoaded = false,
+    this.phoneVerified = false,
+    this.needsPhoneVerification = false,
     this.userId,
     this.role,
     this.facilityGroupId,
@@ -25,6 +29,8 @@ class AuthState {
     String? password,
     bool? isLoggedIn,
     bool? isProfileLoaded,
+    bool? phoneVerified,
+    bool? needsPhoneVerification,
     String? userId,
     String? role,
     String? facilityGroupId,
@@ -35,6 +41,8 @@ class AuthState {
       password: password ?? this.password,
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
       isProfileLoaded: isProfileLoaded ?? this.isProfileLoaded,
+      phoneVerified: phoneVerified ?? this.phoneVerified,
+      needsPhoneVerification: needsPhoneVerification ?? this.needsPhoneVerification,
       userId: userId ?? this.userId,
       role: role ?? this.role,
       facilityGroupId: facilityGroupId ?? this.facilityGroupId,

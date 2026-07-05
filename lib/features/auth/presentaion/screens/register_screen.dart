@@ -36,7 +36,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       auth.password,
       name: auth.name,
     );
-    if (!context.mounted) return;
+    if (!mounted) return;
     result.when(
       success: (_) {},
       failure: (e) {

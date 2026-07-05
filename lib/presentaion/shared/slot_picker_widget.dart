@@ -130,6 +130,19 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
     return false;
   }
 
+  String? _durationHint(int startAdj) {
+    final nextStart = _nextBookingStartAdj(startAdj);
+    if (nextStart != null && nextStart < startAdj + _minMin) {
+      final gap = nextStart - startAdj;
+      return 'لا يمكن الحجز - يوجد حجز بعدها بـ $gap دقيقة فقط';
+    }
+    final limitByBooking = nextStart != null && nextStart < startAdj + _maxMin && nextStart < _adjClose;
+    if (limitByBooking) return 'يتوفر حتى ${_fmt(_toDisplay(nextStart))} - يوجد حجز';
+    final limitByClosing = _adjClose < startAdj + _maxMin;
+    if (limitByClosing) return 'آخر موعد متاح ${_fmt(_toDisplay(_adjClose))}';
+    return null;
+  }
+
   void _onStartTap(int displayMinute) {
     if (_isBooked(displayMinute)) return;
     final adj = _toAdj(displayMinute);
@@ -192,8 +205,8 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
     IconData statusIcon;
     Color statusColor;
     if (_startAdj == null) {
-      statusText = 'اختر وقت البداية';
-      statusIcon = Icons.touch_app;
+      statusText = 'اختر من الأوقات المتاحة بالأسفل';
+      statusIcon = Icons.arrow_downward;
       statusColor = scheme.primary;
     } else if (_endAdj == null) {
       statusText = 'اخترت ${_fmt(_toDisplay(_startAdj!))}، اختر المدة';
@@ -352,6 +365,10 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
             }).toList(),
           ),
         ],
+        if (_startAdj != null) ...[
+          const SizedBox(height: 6),
+          _DurationHint(hint: _durationHint(_startAdj!)),
+        ],
         if (_startAdj != null && _endAdj != null) ...[
           const SizedBox(height: 16),
           Container(
@@ -398,6 +415,24 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _DurationHint extends StatelessWidget {
+  final String? hint;
+  const _DurationHint({required this.hint});
+
+  @override
+  Widget build(BuildContext context) {
+    if (hint == null) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(Icons.info_outline, size: 14, color: scheme.primary),
+        const SizedBox(width: 6),
+        Text(hint!, style: TextStyle(fontSize: 12, color: scheme.primary)),
       ],
     );
   }

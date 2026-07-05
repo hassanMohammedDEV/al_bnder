@@ -27,3 +27,23 @@
 - `lib/features/admin/` — admin screens + admin repo
 - `lib/core/router/app_router.dart` — all routes
 - `lib/features/auth/providers/auth_provider.dart` — authStateProvider
+
+## In Progress
+_none_
+
+## Done
+
+### OTP fresh-install redirect loop
+- Remove `needsPhoneVerification` from persisted session (`_saveSession` in auth_provider.dart)
+- In `main.dart`, always set `needsPhoneVerification: false` on initial load
+- In `AuthNotifier.build()`, if initial auth exists with `isLoggedIn=true` and `isProfileLoaded=false`, schedule a `Future.microtask` to call `getProfile()`
+- In `updateProfile()`, if `phone_verified` is false, auto-set `needsPhoneVerification=true`
+- On fresh install with stale Keychain data: profile fetch fails → `profileLoadFailed()` → no OTP redirect → login screen
+
+### logoutAndClear() + deleteAccount()
+- Added `logoutAndClear()` — async variant of `logout()` that `await`s `_clearSession()`
+- Updated `deleteAccount()` to use `logoutAndClear()` instead of `logout()`
+
+## Next Steps
+- Monitor for any regressions in OTP flow on fresh install vs. upgrade scenarios
+- Test delete-account flow end-to-end to confirm session clears properly after account deletion

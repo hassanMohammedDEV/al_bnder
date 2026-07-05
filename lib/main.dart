@@ -28,6 +28,8 @@ void main() async {
       phone: map['phone'] as String? ?? '',
       isLoggedIn: map['isLoggedIn'] as bool? ?? false,
       isProfileLoaded: map['isProfileLoaded'] as bool? ?? false,
+      phoneVerified: map['phoneVerified'] as bool? ?? false,
+      needsPhoneVerification: map['needsPhoneVerification'] as bool? ?? false,
       userId: map['userId'] as String?,
       role: map['role'] as String?,
       facilityGroupId: map['facilityGroupId'] as String?,

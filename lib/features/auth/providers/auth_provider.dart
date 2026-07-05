@@ -23,7 +23,21 @@ class AuthNotifier extends Notifier<AuthState> {
   @override
   AuthState build() {
     final initial = ref.read(initialAuthProvider);
-    if (initial != null) return initial;
+    if (initial != null) {
+      if (initial.isLoggedIn && !initial.isProfileLoaded) {
+        Future.microtask(() async {
+          final result = await ref.read(authServiceProvider).getProfile();
+          result.when(
+            success: (profile) => updateProfile(profile),
+            failure: (_) {
+              state = const AuthState();
+              _clearSession();
+            },
+          );
+        });
+      }
+      return initial;
+    }
     return const AuthState();
   }
 
@@ -31,7 +45,11 @@ class AuthNotifier extends Notifier<AuthState> {
   void updatePhone(String value) => state = state.copyWith(phone: value);
   void updatePassword(String value) => state = state.copyWith(password: value);
   void setLoggedIn(AuthState auth) {
-    state = auth.copyWith(isLoggedIn: true, isProfileLoaded: false);
+    state = auth.copyWith(
+      isLoggedIn: true,
+      isProfileLoaded: false,
+      needsPhoneVerification: state.needsPhoneVerification,
+    );
     _saveSession(state);
     ref.invalidate(facilityGroupsProvider);
     ref.invalidate(facilitiesProvider);
@@ -45,8 +63,19 @@ class AuthNotifier extends Notifier<AuthState> {
       name: profile['full_name'] as String? ?? state.name,
       role: profile['role'] as String?,
       facilityGroupId: profile['facility_group_id'] as String?,
+      phoneVerified: profile['phone_verified'] as bool? ?? state.phoneVerified,
       isProfileLoaded: true,
     );
+    _saveSession(state);
+  }
+
+  void setPhoneVerified(bool value) {
+    state = state.copyWith(phoneVerified: value, needsPhoneVerification: false);
+    _saveSession(state);
+  }
+
+  void setNeedsPhoneVerification(bool value) {
+    state = state.copyWith(needsPhoneVerification: value);
     _saveSession(state);
   }
 
@@ -56,7 +85,16 @@ class AuthNotifier extends Notifier<AuthState> {
 
   void logout() {
     state = const AuthState();
-    _clearSession();
+    ref.invalidate(facilityGroupsProvider);
+    ref.invalidate(facilitiesProvider);
+    ref.invalidate(walletInfoFamilyProvider);
+    ref.invalidate(dashboardProvider);
+    ref.invalidate(pendingBookingsProvider);
+  }
+
+  Future<void> logoutAndClear() async {
+    await _clearSession();
+    state = const AuthState();
     ref.invalidate(facilityGroupsProvider);
     ref.invalidate(facilitiesProvider);
     ref.invalidate(walletInfoFamilyProvider);
@@ -71,6 +109,8 @@ class AuthNotifier extends Notifier<AuthState> {
       'phone': auth.phone,
       'isLoggedIn': auth.isLoggedIn,
       'isProfileLoaded': auth.isProfileLoaded,
+      'phoneVerified': auth.phoneVerified,
+      'needsPhoneVerification': auth.needsPhoneVerification,
       'userId': auth.userId,
       'role': auth.role,
       'facilityGroupId': auth.facilityGroupId,
@@ -97,6 +137,9 @@ class AuthService {
   Future<Result<AuthState>> register(String phone, String password, {String? name}) => _repo.register(phone, password, name: name);
   Future<Result<AuthState>> login(String phone, String password) => _repo.login(phone, password);
   Future<Result<Map<String, dynamic>>> getProfile() => _repo.getProfile();
+  Future<Result<Map<String, dynamic>>> forgotPassword(String phone) => _repo.forgotPassword(phone);
+  Future<Result<Map<String, dynamic>>> updateName(String name) => _repo.updateName(name);
+  Future<Result<Map<String, dynamic>>> changePassword(String password) => _repo.changePassword(password);
 }
 
 final authActionProvider = StateNotifierProvider<AuthActionNotifier, ActionStore>(
@@ -149,6 +192,7 @@ class AuthActionNotifier extends StateNotifier<ActionStore> {
     state = state.start(key);
     final result = await ref.read(authServiceProvider).register(phone, password, name: name);
     if (result is Success<AuthState>) {
+      ref.read(authStateProvider.notifier).setNeedsPhoneVerification(true);
       ref.read(authStateProvider.notifier).setLoggedIn(result.data);
       await _fetchProfile();
       state = state.success(key);
@@ -158,17 +202,52 @@ class AuthActionNotifier extends StateNotifier<ActionStore> {
     return result;
   }
 
-  Future<Result<void>> deleteAccount() async {
-    const key = 'delete_account';
+  Future<Result<Map<String, dynamic>>> updateName(String name) async {
+    const key = 'update_name';
     state = state.start(key);
-    final result = await ref.read(authServiceProvider)._repo.deleteAccount();
+    final result = await ref.read(authServiceProvider).updateName(name);
     result.when(
       success: (_) {
-        ref.read(authStateProvider.notifier).logout();
+        ref.read(authStateProvider.notifier).updateName(name);
         state = state.success(key);
       },
       failure: (e) => state = state.fail(key, e),
     );
+    return result;
+  }
+
+  Future<Result<Map<String, dynamic>>> changePassword(String password) async {
+    const key = 'change_password';
+    state = state.start(key);
+    final result = await ref.read(authServiceProvider).changePassword(password);
+    result.when(
+      success: (_) => state = state.success(key),
+      failure: (e) => state = state.fail(key, e),
+    );
+    return result;
+  }
+
+  Future<Result<Map<String, dynamic>>> forgotPassword(String phone) async {
+    const key = 'forgot_password';
+    state = state.start(key);
+    final result = await ref.read(authServiceProvider).forgotPassword(phone);
+    result.when(
+      success: (_) => state = state.success(key),
+      failure: (e) => state = state.fail(key, e),
+    );
+    return result;
+  }
+
+  Future<Result<void>> deleteAccount() async {
+    const key = 'delete_account';
+    state = state.start(key);
+    final result = await ref.read(authServiceProvider)._repo.deleteAccount();
+    if (result is Success) {
+      await ref.read(authStateProvider.notifier).logoutAndClear();
+      state = state.success(key);
+    } else if (result is Failure) {
+      state = state.fail(key, result.error);
+    }
     return result;
   }
 
