@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentaion/screens/login_screen.dart';
 import '../../features/auth/presentaion/screens/register_screen.dart';
+import '../../features/auth/presentaion/screens/forgot_password_screen.dart';
+import '../../features/auth/presentaion/screens/forgot_password_otp_screen.dart';
 import '../../features/auth/presentaion/screens/edit_profile_screen.dart';
 import '../../features/auth/presentaion/screens/otp_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
@@ -47,7 +49,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final auth = ref.read(authStateProvider);
       final isLoggedIn = auth.isLoggedIn;
       final location = state.matchedLocation;
-      final isAuthRoute = location == '/login' || location == '/register' || location == '/verify-otp';
+      final isAuthRoute = location == '/login' || location == '/register' || location == '/verify-otp' || location == '/forgot-password' || location == '/forgot-password-otp';
 
       if (isLoggedIn) {
         if (auth.needsPhoneVerification && location != '/verify-otp') return '/verify-otp';
@@ -64,6 +66,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/verify-otp',
         pageBuilder: (_, __) => const CupertinoPage(child: OtpScreen()),
       ),
+      GoRoute(path: '/forgot-password', pageBuilder: (_, __) => const CupertinoPage(child: ForgotPasswordScreen())),
+      GoRoute(path: '/forgot-password-otp', pageBuilder: (_, __) => const CupertinoPage(child: ForgotPasswordOtpScreen())),
       GoRoute(path: '/home', pageBuilder: (_, __) => const CupertinoPage(child: HomeScreen())),
       GoRoute(
         path: '/facilities/:groupId',

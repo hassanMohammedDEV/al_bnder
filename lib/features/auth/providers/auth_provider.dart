@@ -157,7 +157,7 @@ class AuthService {
   Future<Result<AuthState>> register(String phone, String password, {String? name}) => _repo.register(phone, password, name: name);
   Future<Result<AuthState>> login(String phone, String password) => _repo.login(phone, password);
   Future<Result<Map<String, dynamic>>> getProfile() => _repo.getProfile();
-  Future<Result<Map<String, dynamic>>> forgotPassword(String phone) => _repo.forgotPassword(phone);
+  Future<Result<void>> resetPassword(String phone, String code, String newPassword) => _repo.resetPassword(phone, code, newPassword);
   Future<Result<Map<String, dynamic>>> updateName(String name) => _repo.updateName(name);
   Future<Result<Map<String, dynamic>>> changePassword(String password) => _repo.changePassword(password);
   Future<Result<void>> setPhoneVerifiedDb() => _repo.setPhoneVerifiedDb();
@@ -278,10 +278,10 @@ class AuthActionNotifier extends StateNotifier<ActionStore> {
     return result;
   }
 
-  Future<Result<Map<String, dynamic>>> forgotPassword(String phone) async {
-    const key = 'forgot_password';
+  Future<Result<void>> resetPassword(String phone, String code, String newPassword) async {
+    const key = 'reset_password';
     state = state.start(key);
-    final result = await ref.read(authServiceProvider).forgotPassword(phone);
+    final result = await ref.read(authServiceProvider).resetPassword(phone, code, newPassword);
     result.when(
       success: (_) => state = state.success(key),
       failure: (e) => state = state.fail(key, e),

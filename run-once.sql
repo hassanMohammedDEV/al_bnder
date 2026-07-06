@@ -1348,4 +1348,51 @@ $$;
 
 GRANT EXECUTE ON FUNCTION set_phone_verified TO authenticated;
 
+-- 24. إعادة تعيين كلمة المرور عبر OTP
+CREATE OR REPLACE FUNCTION reset_password(
+  p_phone         TEXT,
+  p_code          TEXT,
+  p_new_password  TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, extensions
+AS $$
+DECLARE
+  v_valid BOOLEAN;
+  v_uid   UUID;
+BEGIN
+  -- التحقق من صحة الرمز
+  SELECT EXISTS(
+    SELECT 1 FROM otp_codes
+    WHERE phone = p_phone
+      AND code = p_code
+      AND expires_at > now()
+  ) INTO v_valid;
+
+  IF NOT v_valid THEN
+    RETURN jsonb_build_object('success', false, 'message', 'رمز غير صحيح أو منتهي الصلاحية');
+  END IF;
+
+  -- العثور على المستخدم عبر جدول profiles (لأن auth.users.phone قد يكون فارغاً)
+  SELECT id INTO v_uid FROM profiles WHERE phone = p_phone;
+  IF v_uid IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'المستخدم غير موجود');
+  END IF;
+
+  -- حذف رمز OTP بعد الاستخدام
+  DELETE FROM otp_codes WHERE phone = p_phone;
+
+  -- تغيير كلمة المرور
+  UPDATE auth.users
+  SET encrypted_password = crypt(p_new_password, gen_salt('bf'))
+  WHERE id = v_uid;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم تغيير كلمة السر بنجاح');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION reset_password TO anon, authenticated;
+
 NOTIFY pgrst, 'reload schema';

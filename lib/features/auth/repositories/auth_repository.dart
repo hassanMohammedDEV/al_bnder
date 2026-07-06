@@ -9,7 +9,7 @@ abstract class AuthRepository {
   Future<Result<AuthState>> register(String phone, String password, {String? name});
   Future<Result<Map<String, dynamic>>> getProfile();
   Future<Result<void>> deleteAccount();
-  Future<Result<Map<String, dynamic>>> forgotPassword(String phone);
+  Future<Result<void>> resetPassword(String phone, String code, String newPassword);
   Future<Result<Map<String, dynamic>>> updateName(String name);
   Future<Result<Map<String, dynamic>>> changePassword(String newPassword);
   Future<Result<void>> setPhoneVerifiedDb();

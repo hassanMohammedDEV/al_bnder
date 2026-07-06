@@ -90,51 +90,10 @@ class LoginScreen extends ConsumerWidget {
                     : const Text('دخول', style: TextStyle(fontSize: 16)),
               ),
               const SizedBox(height: 8),
-              TextButton(
-                onPressed: () {
-                  final phone = ref.read(authStateProvider).phone;
-                  if (phone.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('يرجى إدخال رقم الجوال أولاً')),
-                    );
-                    return;
-                  }
-                  showDialog(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('استعادة كلمة السر'),
-                      content: Text('سيتم إرسال كلمة سر جديدة إلى $phone'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: const Text('إلغاء'),
-                        ),
-                        FilledButton(
-                          onPressed: () async {
-                            Navigator.pop(ctx);
-                            final result = await ref.read(authActionProvider.notifier).forgotPassword(phone);
-                            if (!context.mounted) return;
-                            result.when(
-                              success: (_) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('تم إرسال كلمة السر الجديدة')),
-                                );
-                              },
-                              failure: (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(e.message)),
-                                );
-                              },
-                            );
-                          },
-                          child: const Text('تأكيد'),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                child: const Text('نسيت كلمة السر؟'),
-              ),
+                TextButton(
+                  onPressed: () => context.go('/forgot-password'),
+                  child: const Text('نسيت كلمة السر؟'),
+                ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => context.go('/register'),

@@ -111,6 +111,15 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> resetPassword(String phone, String code, String newPassword) {
+    return _apiClient.post('rpc/reset_password', body: {
+      'p_phone': phone,
+      'p_code': code,
+      'p_new_password': newPassword,
+    }, parser: (_) {});
+  }
+
+  @override
   Future<Result<Map<String, dynamic>>> forgotPassword(String phone) {
     return _apiClient.post('rpc/forgot_password', body: {
       'p_phone': phone,
