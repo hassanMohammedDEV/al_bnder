@@ -1324,7 +1324,28 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION generate_otp TO authenticated;
-GRANT EXECUTE ON FUNCTION verify_otp TO authenticated;
+GRANT EXECUTE ON FUNCTION generate_otp TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION verify_otp TO anon, authenticated;
+
+-- بعد التحقق من OTP، تعيين phone_verified = true (للمستخدم المسجل)
+CREATE OR REPLACE FUNCTION set_phone_verified()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح');
+  END IF;
+  UPDATE profiles SET phone_verified = true WHERE id = v_user_id;
+  RETURN jsonb_build_object('success', true, 'message', 'تم التحقق');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION set_phone_verified TO authenticated;
 
 NOTIFY pgrst, 'reload schema';

@@ -25,7 +25,7 @@ void main() async {
     final map = jsonDecode(savedSession) as Map<String, dynamic>;
     initialAuth = AuthState(
       name: map['name'] as String? ?? '',
-      phone: map['phone'] as String? ?? '',
+      phone: map['pendingPhone'] as String? ?? map['phone'] as String? ?? '',
       isLoggedIn: map['isLoggedIn'] as bool? ?? false,
       isProfileLoaded: map['isProfileLoaded'] as bool? ?? false,
       phoneVerified: map['phoneVerified'] as bool? ?? false,
@@ -33,6 +33,7 @@ void main() async {
       userId: map['userId'] as String?,
       role: map['role'] as String?,
       facilityGroupId: map['facilityGroupId'] as String?,
+      pendingPhone: map['pendingPhone'] as String?,
     );
   }
 

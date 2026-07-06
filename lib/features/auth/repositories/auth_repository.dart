@@ -12,4 +12,5 @@ abstract class AuthRepository {
   Future<Result<Map<String, dynamic>>> forgotPassword(String phone);
   Future<Result<Map<String, dynamic>>> updateName(String name);
   Future<Result<Map<String, dynamic>>> changePassword(String newPassword);
+  Future<Result<void>> setPhoneVerifiedDb();
 }

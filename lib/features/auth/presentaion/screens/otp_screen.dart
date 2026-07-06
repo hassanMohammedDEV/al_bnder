@@ -20,7 +20,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   bool _loading = false;
   static const _resendWait = 60;
   int _remaining = 0;
-  String get _phone => ref.read(authStateProvider).phone;
+  String get _phone {
+    final pending = ref.read(pendingRegistrationProvider);
+    if (pending != null) return pending.phone;
+    return ref.read(authStateProvider).phone;
+  }
 
   @override
   void initState() {
@@ -55,6 +59,13 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     super.dispose();
   }
 
+  void _goBackToRegister() {
+    ref.read(authStateProvider.notifier).clearPendingPhone();
+    ref.read(pendingRegistrationProvider.notifier).state = null;
+    ref.read(authStateProvider.notifier).logout();
+    context.go('/register');
+  }
+
   Future<void> _sendOtp() async {
     final phone = _phone;
     if (phone.isEmpty) return;
@@ -81,15 +92,54 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       phone,
       _codeController.text,
     );
-    if (!mounted) return;
-    setState(() => _loading = false);
+    if (!mounted) { _loading = false; return; }
 
     result.when(
-      success: (_) {
-        ref.read(authStateProvider.notifier).setPhoneVerified(true);
-        context.go('/home');
+      success: (_) async {
+        final pending = ref.read(pendingRegistrationProvider);
+        if (pending != null) {
+          final regResult = await ref.read(authActionProvider.notifier).completeRegistration();
+          if (!mounted) { _loading = false; return; }
+          regResult.when(
+            success: (auth) {
+              ref.read(authStateProvider.notifier).setLoggedIn(auth);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _loading = false;
+                  context.go('/home');
+                }
+              });
+            },
+            failure: (e) {
+              setState(() => _loading = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(translateError(e))),
+              );
+            },
+          );
+        } else {
+          if (ref.read(authStateProvider).isLoggedIn) {
+            ref.read(authStateProvider.notifier).setPhoneVerified(true);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _loading = false;
+                context.go('/home');
+              }
+            });
+          } else {
+            setState(() => _loading = false);
+            ref.read(authStateProvider.notifier).clearPendingPhone();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('انتهت صلاحية الجلسة، يرجى التسجيل مرة أخرى')),
+              );
+              context.go('/register');
+            }
+          }
+        }
       },
       failure: (e) {
+        setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(translateError(e))),
         );
@@ -102,7 +152,13 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('تأكيد رقم الجوال')),
+      appBar: AppBar(
+        title: const Text('تأكيد رقم الجوال'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _goBackToRegister,
+        ),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -156,6 +212,16 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                       ? 'إعادة إرسال الرمز (${_remaining}s)'
                       : 'إعادة إرسال الرمز'),
                 ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _goBackToRegister,
+                icon: const Icon(Icons.edit, size: 16),
+                label: const Text('رقم خطأ؟ سجل برقم جديد'),
+                style: TextButton.styleFrom(
+                  foregroundColor: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),

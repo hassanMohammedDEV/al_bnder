@@ -47,12 +47,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       final auth = ref.read(authStateProvider);
       final isLoggedIn = auth.isLoggedIn;
       final location = state.matchedLocation;
-      final isAuthRoute = location == '/login' || location == '/register';
+      final isAuthRoute = location == '/login' || location == '/register' || location == '/verify-otp';
 
       if (isLoggedIn) {
         if (auth.needsPhoneVerification && location != '/verify-otp') return '/verify-otp';
         if (isAuthRoute) return '/home';
       }
+      if (!isLoggedIn && auth.pendingPhone != null && location != '/verify-otp') return '/verify-otp';
       if (!isLoggedIn && !isAuthRoute && location != '/register') return '/login';
       return null;
     },

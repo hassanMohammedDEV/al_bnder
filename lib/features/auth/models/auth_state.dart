@@ -9,6 +9,7 @@ class AuthState {
   final String? userId;
   final String? role;
   final String? facilityGroupId;
+  final String? pendingPhone;
 
   const AuthState({
     this.name = '',
@@ -21,6 +22,7 @@ class AuthState {
     this.userId,
     this.role,
     this.facilityGroupId,
+    this.pendingPhone,
   });
 
   AuthState copyWith({
@@ -34,6 +36,8 @@ class AuthState {
     String? userId,
     String? role,
     String? facilityGroupId,
+    String? pendingPhone,
+    bool clearPendingPhone = false,
   }) {
     return AuthState(
       name: name ?? this.name,
@@ -46,6 +50,7 @@ class AuthState {
       userId: userId ?? this.userId,
       role: role ?? this.role,
       facilityGroupId: facilityGroupId ?? this.facilityGroupId,
+      pendingPhone: clearPendingPhone ? null : (pendingPhone ?? this.pendingPhone),
     );
   }
 

@@ -256,9 +256,9 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 title: const Text('البريد الإلكتروني'),
                 subtitle: const Text('7assanwr@gmail.com'),
-                trailing: const Icon(Icons.copy, size: 18),
+                trailing: const Icon(Icons.open_in_new, size: 18),
                 onTap: () {
-                  // Copy email to clipboard
+                  launchUrl(Uri.parse('mailto:7assanwr@gmail.com'));
                 },
               ),
             ],
@@ -358,7 +358,17 @@ class SettingsScreen extends ConsumerWidget {
               ),
             );
             if (confirm == true) {
+              if (context.mounted) {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
               final result = await ref.read(authActionProvider.notifier).deleteAccount();
+              if (context.mounted) Navigator.of(context).pop();
               if (context.mounted) {
                 result.when(
                   success: (_) {

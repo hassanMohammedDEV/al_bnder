@@ -138,6 +138,11 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> setPhoneVerifiedDb() {
+    return _apiClient.post('rpc/set_phone_verified', body: {}, parser: (_) {});
+  }
+
+  @override
   Future<Result<AuthState>> register(String phone, String password,
       {String? name}) async {
     final email = '$phone@al-bndr.app';

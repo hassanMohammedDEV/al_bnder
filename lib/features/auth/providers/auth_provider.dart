@@ -19,6 +19,15 @@ final authStateProvider = NotifierProvider<AuthNotifier, AuthState>(
   AuthNotifier.new,
 );
 
+class PendingRegistration {
+  final String phone;
+  final String password;
+  final String? name;
+  PendingRegistration({required this.phone, required this.password, this.name});
+}
+
+final pendingRegistrationProvider = StateProvider<PendingRegistration?>((ref) => null);
+
 class AuthNotifier extends Notifier<AuthState> {
   @override
   AuthState build() {
@@ -47,7 +56,7 @@ class AuthNotifier extends Notifier<AuthState> {
   void setLoggedIn(AuthState auth) {
     state = auth.copyWith(
       isLoggedIn: true,
-      isProfileLoaded: false,
+      isProfileLoaded: state.isProfileLoaded,
       needsPhoneVerification: state.needsPhoneVerification,
     );
     _saveSession(state);
@@ -76,6 +85,16 @@ class AuthNotifier extends Notifier<AuthState> {
 
   void setNeedsPhoneVerification(bool value) {
     state = state.copyWith(needsPhoneVerification: value);
+    _saveSession(state);
+  }
+
+  void setPendingPhone(String phone) {
+    state = state.copyWith(phone: phone, pendingPhone: phone);
+    _saveSession(state);
+  }
+
+  void clearPendingPhone() {
+    state = state.copyWith(pendingPhone: '', clearPendingPhone: true);
     _saveSession(state);
   }
 
@@ -114,6 +133,7 @@ class AuthNotifier extends Notifier<AuthState> {
       'userId': auth.userId,
       'role': auth.role,
       'facilityGroupId': auth.facilityGroupId,
+      'pendingPhone': auth.pendingPhone,
     }));
   }
 
@@ -140,6 +160,7 @@ class AuthService {
   Future<Result<Map<String, dynamic>>> forgotPassword(String phone) => _repo.forgotPassword(phone);
   Future<Result<Map<String, dynamic>>> updateName(String name) => _repo.updateName(name);
   Future<Result<Map<String, dynamic>>> changePassword(String password) => _repo.changePassword(password);
+  Future<Result<void>> setPhoneVerifiedDb() => _repo.setPhoneVerifiedDb();
 }
 
 final authActionProvider = StateNotifierProvider<AuthActionNotifier, ActionStore>(
@@ -187,19 +208,49 @@ class AuthActionNotifier extends StateNotifier<ActionStore> {
     return result;
   }
 
-  Future<Result<AuthState>> register(String phone, String password, {String? name}) async {
-    const key = 'register';
+  Future<Result<void>> startRegistration(String phone, String password, {String? name}) async {
+    const key = 'start_registration';
     state = state.start(key);
-    final result = await ref.read(authServiceProvider).register(phone, password, name: name);
-    if (result is Success<AuthState>) {
-      ref.read(authStateProvider.notifier).setNeedsPhoneVerification(true);
-      ref.read(authStateProvider.notifier).setLoggedIn(result.data);
-      await _fetchProfile();
-      state = state.success(key);
-    } else if (result is Failure<AuthState>) {
-      state = state.fail(key, result.error);
+    ref.read(pendingRegistrationProvider.notifier).state = PendingRegistration(
+      phone: phone, password: password, name: name,
+    );
+    ref.read(authStateProvider.notifier).setPendingPhone(phone);
+    state = state.success(key);
+    return Success(null);
+  }
+
+  Future<Result<AuthState>> completeRegistration() async {
+    const key = 'complete_registration';
+    state = state.start(key);
+    final pending = ref.read(pendingRegistrationProvider);
+    if (pending == null) {
+      state = state.fail(key, NetworkError('لا توجد بيانات تسجيل'));
+      return Failure(NetworkError('لا توجد بيانات تسجيل'));
     }
-    return result;
+    try {
+      final result = await ref.read(authServiceProvider).register(
+        pending.phone, pending.password, name: pending.name,
+      );
+      if (result is Success<AuthState>) {
+        await _fetchProfile();
+        await ref.read(authServiceProvider).setPhoneVerifiedDb();
+        ref.read(pendingRegistrationProvider.notifier).state = null;
+        ref.read(authStateProvider.notifier).clearPendingPhone();
+        ref.read(authStateProvider.notifier).setPhoneVerified(true);
+        state = state.success(key);
+        return result;
+      } else if (result is Failure<AuthState>) {
+        state = state.fail(key, result.error);
+        return result;
+      }
+    } catch (e) {
+      final err = NetworkError(e.toString());
+      state = state.fail(key, err);
+      return Failure(err);
+    }
+    const err = NetworkError('فشل التسجيل');
+    state = state.fail(key, err);
+    return Failure(err);
   }
 
   Future<Result<Map<String, dynamic>>> updateName(String name) async {

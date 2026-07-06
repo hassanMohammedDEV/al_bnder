@@ -31,14 +31,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     final auth = ref.read(authStateProvider);
-    final result = await ref.read(authActionProvider.notifier).register(
+    final result = await ref.read(authActionProvider.notifier).startRegistration(
       auth.phone,
       auth.password,
       name: auth.name,
     );
     if (!mounted) return;
     result.when(
-      success: (_) {},
+      success: (_) => context.go('/verify-otp'),
       failure: (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(translateError(e))),
@@ -144,8 +144,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
               const SizedBox(height: 24),
               FilledButton(
-                onPressed: action.isLoading('register') ? null : register,
-                child: action.isLoading('register')
+                onPressed: action.isLoading('start_registration') ? null : register,
+                child: action.isLoading('start_registration')
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Text('تسجيل', style: TextStyle(fontSize: 16)),
               ),
