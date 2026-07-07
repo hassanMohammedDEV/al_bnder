@@ -8,6 +8,7 @@ import '../../features/ads/models/facility_ad.dart';
 import '../../features/ads/providers/ads_provider.dart';
 import '../../features/facilities/providers/facility_provider.dart';
 import '../../features/facilities/providers/selected_group_provider.dart';
+import 'shimmer_widget.dart';
 
 class AdBanner extends ConsumerStatefulWidget {
   const AdBanner({super.key});
@@ -69,7 +70,13 @@ class _AdBannerState extends ConsumerState<AdBanner> with WidgetsBindingObserver
     final adsAsync = ref.watch(activeAdsProvider);
 
     return adsAsync.when(
-      loading: () => const SizedBox(height: 130, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+      loading: () => const SizedBox(
+        height: 130,
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 6),
+          child: ShimmerWidget(height: 130, borderRadius: 16),
+        ),
+      ),
       error: (_, _) => const SizedBox.shrink(),
       data: (ads) {
         if (ads.isEmpty) return _EmptyAdSpace();

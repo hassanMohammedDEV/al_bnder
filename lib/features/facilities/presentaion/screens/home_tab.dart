@@ -10,6 +10,7 @@ import '../../providers/selected_group_provider.dart';
 import '../../models/facility_group.dart';
 import '../../../wallet/providers/wallet_provider.dart';
 import '../../../../presentaion/shared/ad_banner.dart';
+import '../../../../presentaion/shared/shimmer_widget.dart';
 
 class HomeTab extends ConsumerStatefulWidget {
   const HomeTab({super.key});
@@ -51,7 +52,17 @@ class _HomeTabState extends ConsumerState<HomeTab> {
         children: [
         // Group selector
         groups.isEmpty
-            ? const Center(child: CircularProgressIndicator())
+            ? SizedBox(
+                height: 44,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: 4,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (_, __) => const ShimmerWidget(
+                    width: 100, height: 44, borderRadius: 22,
+                  ),
+                ),
+              )
             : SizedBox(
                 height: 44,
                 child: ListView.separated(
@@ -267,16 +278,25 @@ class _WalletCard extends ConsumerWidget {
                     fontSize: 13,
                   )),
                   const SizedBox(height: 4),
-                  Text(
-                    walletAsync.when(
-                      data: (w) => '${w.balance.toStringAsFixed(0)} ر.ي',
-                      loading: () => '---',
-                      error: (_, __) => '---',
+                  walletAsync.when(
+                    data: (w) => Text(
+                      '${w.balance.toStringAsFixed(0)} ر.ي',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
+                    loading: () => const ShimmerWidget(
+                      width: 100, height: 28, borderRadius: 4,
+                    ),
+                    error: (_, __) => const Text(
+                      '---',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -300,7 +320,14 @@ class _FacilitiesList extends ConsumerWidget {
     final facilitiesAsync = ref.watch(facilitiesProvider(groupId));
 
     return facilitiesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => Column(
+        children: List.generate(
+          3,
+          (_) => const ShimmerWidget(
+            height: 88, margin: EdgeInsets.only(bottom: 12), borderRadius: 16,
+          ),
+        ),
+      ),
       error: (e, _) => Center(
         child: Column(
           children: [
