@@ -104,6 +104,7 @@ class AuthNotifier extends Notifier<AuthState> {
 
   void logout() {
     state = const AuthState();
+    _clearSession();
     ref.invalidate(facilityGroupsProvider);
     ref.invalidate(facilitiesProvider);
     ref.invalidate(walletInfoFamilyProvider);
