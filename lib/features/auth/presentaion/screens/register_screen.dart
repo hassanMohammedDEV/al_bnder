@@ -151,8 +151,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
               const SizedBox(height: 16),
               TextButton(
-                onPressed: () => context.go('/login'),
-                child: const Text('لديك حساب؟ سجل دخول'),
+                  onPressed: () => context.pop(),
+                  child: const Text('لديك حساب؟ سجل دخول'),
               ),
             ],
           ),

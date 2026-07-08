@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:app_platform_core/core.dart';
@@ -33,6 +34,12 @@ class AuthNotifier extends Notifier<AuthState> {
   AuthState build() {
     final initial = ref.read(initialAuthProvider);
     if (initial != null) {
+      if (initial.phone.isNotEmpty) {
+        Future.microtask(() {
+          const secure = FlutterSecureStorage();
+          secure.write(key: 'remembered_phone', value: initial.phone);
+        });
+      }
       if (initial.isLoggedIn && !initial.isProfileLoaded) {
         Future.microtask(() async {
           final result = await ref.read(authServiceProvider).getProfile();
@@ -136,6 +143,9 @@ class AuthNotifier extends Notifier<AuthState> {
       'facilityGroupId': auth.facilityGroupId,
       'pendingPhone': auth.pendingPhone,
     }));
+    if (auth.phone.isNotEmpty) {
+      await secure.write(key: 'remembered_phone', value: auth.phone);
+    }
   }
 
   Future<void> _clearSession() async {
@@ -205,6 +215,7 @@ class AuthActionNotifier extends StateNotifier<ActionStore> {
       ref.read(authStateProvider.notifier).setLoggedIn(result.data);
       await _fetchProfile();
       state = state.success(key);
+      AuthRepositoryImpl.saveBiometricCredentials(phone, password);
     } else if (result is Failure<AuthState>) {
       state = state.fail(key, result.error);
     }

@@ -20,20 +20,30 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _phoneController = TextEditingController();
   bool _hasBiometrics = false;
   bool _biometricChecked = false;
 
   @override
   void initState() {
     super.initState();
-    _loadSavedPhone();
-    _checkBiometrics();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSavedPhone();
+      _checkBiometrics();
+    });
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSavedPhone() async {
     const secure = FlutterSecureStorage();
     final phone = await secure.read(key: 'remembered_phone');
-    if (phone != null && phone.isNotEmpty && mounted) {
+    if (phone != null && phone.isNotEmpty) {
+      _phoneController.text = phone;
       ref.read(authStateProvider.notifier).updatePhone(phone);
     }
   }
@@ -44,16 +54,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (creds != null && mounted) {
         final localAuth = LocalAuthentication();
         final canCheck = await localAuth.canCheckBiometrics;
-        if (canCheck && mounted) {
-          final enrolled = await localAuth.isDeviceSupported();
-          if (mounted) {
-            setState(() {
-              _hasBiometrics = enrolled;
-              _biometricChecked = true;
-            });
-          }
-        } else if (mounted) {
-          setState(() => _biometricChecked = true);
+        final supported = await localAuth.isDeviceSupported();
+        if (mounted) {
+          setState(() {
+            _hasBiometrics = canCheck && supported;
+            _biometricChecked = true;
+          });
         }
       } else if (mounted) {
         setState(() => _biometricChecked = true);
@@ -68,7 +74,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final localAuth = LocalAuthentication();
       final authed = await localAuth.authenticate(
         localizedReason: 'استخدم بصمتك لتسجيل الدخول',
-        options: const AuthenticationOptions(biometricOnly: true),
+        options: const AuthenticationOptions(
+          stickyAuth: true,
+          biometricOnly: true,
+        ),
       );
       if (!authed || !mounted) return;
 
@@ -89,10 +98,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
         },
       );
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
+        final msg = e is Exception ? e.toString().replaceFirst('Exception: ', '') : 'فشلت البصمة';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('فشلت البصمة، حاول مرة أخرى')),
+          SnackBar(content: Text(msg)),
         );
       }
     }
@@ -110,9 +120,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
 
     result.when(
-      success: (_) {
-        AuthRepositoryImpl.saveBiometricCredentials(phone, password);
-      },
+      success: (_) {},
       failure: (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(translateError(e))),
@@ -150,6 +158,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               AppTextField(
                 label: 'رقم الجوال',
                 hint: '7xxxxxxxx',
+                controller: _phoneController,
                 error: validation.field(AuthFields.phone).error,
                 onChanged: (v) {
                   ref.read(authStateProvider.notifier).updatePhone(v);
@@ -195,8 +204,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 16),
               TextButton(
-                onPressed: () => context.go('/register'),
-                child: const Text('ليس لديك حساب؟ سجل الآن'),
+                  onPressed: () => context.push('/register'),
+                  child: const Text('ليس لديك حساب؟ سجل الآن'),
               ),
             ],
           ),
