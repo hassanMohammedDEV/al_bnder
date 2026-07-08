@@ -4,6 +4,7 @@ import 'package:app_platform_core/core.dart';
 import 'package:app_platform_network/network.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/constants.dart';
@@ -51,6 +52,25 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Result<bool>> checkOtp(String phone, String code) {
+    return _apiClient.post('rpc/check_otp', body: {
+      'p_phone': phone,
+      'p_code': code,
+    }, parser: (json) {
+      return (json as Map<String, dynamic>)['valid'] as bool;
+    });
+  }
+
+  @override
+  Future<Result<bool>> checkPhone(String phone) {
+    return _apiClient.post('rpc/check_phone', body: {
+      'p_phone': phone,
+    }, parser: (json) {
+      return (json as Map<String, dynamic>)['exists'] as bool;
+    });
+  }
+
+  @override
   Future<Result<Map<String, dynamic>>> getProfile() {
     return _apiClient.post('rpc/get_my_profile', body: {}, parser: (json) {
       return (json as Map<String, dynamic>)['data'] as Map<String, dynamic>;
@@ -88,7 +108,7 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<Result<AuthState>> login(String phone, String password) async {
     final email = '$phone@al-bndr.app';
-    return _authApiClient.post('auth/v1/token?grant_type=password',
+    final result = await _authApiClient.post('auth/v1/token?grant_type=password',
         body: {
       'email': email,
       'password': password,
@@ -108,6 +128,40 @@ class AuthRepositoryImpl implements AuthRepository {
         isLoggedIn: true,
       );
     });
+    if (result is Success) {
+      const secure = FlutterSecureStorage();
+      await secure.write(key: 'remembered_phone', value: phone);
+    }
+    return result;
+  }
+
+  static Future<String?> getRememberedPhone() async {
+    const secure = FlutterSecureStorage();
+    return secure.read(key: 'remembered_phone');
+  }
+
+  static Future<void> saveBiometricCredentials(String phone, String password) async {
+    const secure = FlutterSecureStorage();
+    await secure.write(key: 'biometric_creds', value: jsonEncode({
+      'phone': phone,
+      'password': password,
+    }));
+  }
+
+  static Future<Map<String, String>?> getBiometricCredentials() async {
+    const secure = FlutterSecureStorage();
+    final raw = await secure.read(key: 'biometric_creds');
+    if (raw == null) return null;
+    final map = jsonDecode(raw) as Map<String, dynamic>;
+    return {
+      'phone': map['phone'] as String,
+      'password': map['password'] as String,
+    };
+  }
+
+  static Future<void> clearBiometricCredentials() async {
+    const secure = FlutterSecureStorage();
+    await secure.delete(key: 'biometric_creds');
   }
 
   @override
@@ -119,7 +173,6 @@ class AuthRepositoryImpl implements AuthRepository {
     }, parser: (_) {});
   }
 
-  @override
   Future<Result<Map<String, dynamic>>> forgotPassword(String phone) {
     return _apiClient.post('rpc/forgot_password', body: {
       'p_phone': phone,

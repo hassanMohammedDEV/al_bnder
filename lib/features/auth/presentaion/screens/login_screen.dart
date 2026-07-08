@@ -1,34 +1,86 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
+import 'package:local_auth/local_auth.dart';
 
 import '../../../../core/helpers/error_helper.dart';
 import '../../../../presentaion/shared/app_text_field.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/auth_validation_provider.dart';
+import '../../repositories/auth_repository_impl.dart';
 
-class LoginScreen extends ConsumerWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
-    final validation = ref.watch(authValidationProvider);
-    final action = ref.watch(authActionProvider);
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+}
 
-    Future<void> login() async {
-      FocusScope.of(context).unfocus();
-      ref.read(authValidationProvider.notifier)
-          .validateStep([AuthFields.phone, AuthFields.password]);
-      if (!ref.read(authValidationProvider).isValid) return;
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  bool _hasBiometrics = false;
+  bool _biometricChecked = false;
 
-      final result = await ref.read(authActionProvider.notifier).login(
-        ref.read(authStateProvider).phone,
-        ref.read(authStateProvider).password,
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedPhone();
+    _checkBiometrics();
+  }
+
+  Future<void> _loadSavedPhone() async {
+    const secure = FlutterSecureStorage();
+    final phone = await secure.read(key: 'remembered_phone');
+    if (phone != null && phone.isNotEmpty && mounted) {
+      ref.read(authStateProvider.notifier).updatePhone(phone);
+    }
+  }
+
+  Future<void> _checkBiometrics() async {
+    try {
+      final creds = await AuthRepositoryImpl.getBiometricCredentials();
+      if (creds != null && mounted) {
+        final localAuth = LocalAuthentication();
+        final canCheck = await localAuth.canCheckBiometrics;
+        if (canCheck && mounted) {
+          final enrolled = await localAuth.isDeviceSupported();
+          if (mounted) {
+            setState(() {
+              _hasBiometrics = enrolled;
+              _biometricChecked = true;
+            });
+          }
+        } else if (mounted) {
+          setState(() => _biometricChecked = true);
+        }
+      } else if (mounted) {
+        setState(() => _biometricChecked = true);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _biometricChecked = true);
+    }
+  }
+
+  Future<void> _loginWithBiometrics() async {
+    try {
+      final localAuth = LocalAuthentication();
+      final authed = await localAuth.authenticate(
+        localizedReason: 'استخدم بصمتك لتسجيل الدخول',
+        options: const AuthenticationOptions(biometricOnly: true),
       );
-      if (!context.mounted) return;
+      if (!authed || !mounted) return;
+
+      final creds = await AuthRepositoryImpl.getBiometricCredentials();
+      if (creds == null || !mounted) return;
+
+      ref.read(authStateProvider.notifier).updatePhone(creds['phone']!);
+      ref.read(authStateProvider.notifier).updatePassword(creds['password']!);
+
+      final action = ref.read(authActionProvider.notifier);
+      final result = await action.login(creds['phone']!, creds['password']!);
+      if (!mounted) return;
       result.when(
         success: (_) {},
         failure: (e) {
@@ -37,7 +89,43 @@ class LoginScreen extends ConsumerWidget {
           );
         },
       );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('فشلت البصمة، حاول مرة أخرى')),
+        );
+      }
     }
+  }
+
+  Future<void> login() async {
+    FocusScope.of(context).unfocus();
+    ref.read(authValidationProvider.notifier)
+        .validateStep([AuthFields.phone, AuthFields.password]);
+    if (!ref.read(authValidationProvider).isValid) return;
+
+    final phone = ref.read(authStateProvider).phone;
+    final password = ref.read(authStateProvider).password;
+    final result = await ref.read(authActionProvider.notifier).login(phone, password);
+    if (!mounted) return;
+
+    result.when(
+      success: (_) {
+        AuthRepositoryImpl.saveBiometricCredentials(phone, password);
+      },
+      failure: (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(translateError(e))),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final validation = ref.watch(authValidationProvider);
+    final action = ref.watch(authActionProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -83,6 +171,17 @@ class LoginScreen extends ConsumerWidget {
                 prefix: Icon(Icons.lock_outline, color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 32),
+              if (_hasBiometrics && _biometricChecked) ...[
+                OutlinedButton.icon(
+                  onPressed: action.isLoading('login') ? null : _loginWithBiometrics,
+                  icon: Icon(Icons.fingerprint, color: scheme.primary),
+                  label: Text('بصمة الدخول', style: TextStyle(color: scheme.primary)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               FilledButton(
                 onPressed: action.isLoading('login') ? null : login,
                 child: action.isLoading('login')
@@ -90,10 +189,10 @@ class LoginScreen extends ConsumerWidget {
                     : const Text('دخول', style: TextStyle(fontSize: 16)),
               ),
               const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => context.go('/forgot-password'),
-                  child: const Text('نسيت كلمة السر؟'),
-                ),
+              TextButton(
+                onPressed: () => context.push('/forgot-password'),
+                child: const Text('نسيت كلمة السر؟'),
+              ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => context.go('/register'),

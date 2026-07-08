@@ -155,6 +155,8 @@ class AuthService {
 
   Future<Result<void>> generateOtp(String phone) => _repo.generateOtp(phone);
   Future<Result<void>> verifyOtp(String phone, String code) => _repo.verifyOtp(phone, code);
+  Future<Result<bool>> checkOtp(String phone, String code) => _repo.checkOtp(phone, code);
+  Future<Result<bool>> checkPhone(String phone) => _repo.checkPhone(phone);
   Future<Result<AuthState>> register(String phone, String password, {String? name}) => _repo.register(phone, password, name: name);
   Future<Result<AuthState>> login(String phone, String password) => _repo.login(phone, password);
   Future<Result<Map<String, dynamic>>> getProfile() => _repo.getProfile();

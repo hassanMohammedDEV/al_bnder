@@ -1999,6 +1999,57 @@ $$;
 -- -------------------------------------------------------
 GRANT EXECUTE ON FUNCTION generate_otp TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION verify_otp TO anon, authenticated;
+
+-- -------------------------------------------------------
+-- CHECK OTP (no side effects)
+-- POST /rest/v1/rpc/check_otp
+-- Body: { "p_phone": "...", "p_code": "..." }
+-- -------------------------------------------------------
+CREATE OR REPLACE FUNCTION check_otp(
+  p_phone TEXT,
+  p_code  TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_valid BOOLEAN;
+BEGIN
+  SELECT EXISTS(
+    SELECT 1 FROM otp_codes
+    WHERE phone = p_phone
+      AND code = p_code
+      AND expires_at > now()
+  ) INTO v_valid;
+  RETURN jsonb_build_object('valid', v_valid);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION check_otp TO anon, authenticated;
+
+-- -------------------------------------------------------
+-- CHECK PHONE EXISTS
+-- POST /rest/v1/rpc/check_phone
+-- Body: { "p_phone": "..." }
+-- -------------------------------------------------------
+CREATE OR REPLACE FUNCTION check_phone(p_phone TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF EXISTS(SELECT 1 FROM profiles WHERE phone = p_phone) THEN
+    RETURN jsonb_build_object('exists', true);
+  ELSE
+    RETURN jsonb_build_object('exists', false);
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION check_phone TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION create_booking TO authenticated;
 GRANT EXECUTE ON FUNCTION admin_confirm_booking TO authenticated;
 GRANT EXECUTE ON FUNCTION admin_deposit_wallet TO authenticated;

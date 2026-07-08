@@ -163,9 +163,30 @@ class _ForgotPasswordOtpScreenState extends ConsumerState<ForgotPasswordOtpScree
                       letterSpacing: 8,
                     ),
                   ),
-                  onChanged: (v) {
+                  onChanged: (v) async {
                     if (v.length == 6 && !_otpVerified) {
-                      setState(() => _otpVerified = true);
+                      final phone = _phone;
+                      if (phone.isEmpty) return;
+                      setState(() => _loading = true);
+                      final result = await ref.read(authServiceProvider).checkOtp(phone, v);
+                      if (!mounted) { _loading = false; return; }
+                      setState(() => _loading = false);
+                      result.when(
+                        success: (valid) {
+                          if (valid) {
+                            setState(() => _otpVerified = true);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('رمز التحقق خاطئ أو منتهي الصلاحية')),
+                            );
+                          }
+                        },
+                        failure: (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(translateError(e))),
+                          );
+                        },
+                      );
                     }
                   },
                 ),

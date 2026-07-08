@@ -1,4 +1,6 @@
+import 'package:app_platform_core/core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -24,9 +26,24 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   }
 
   Future<void> _sendOtp() async {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) return;
+    final phone = _phoneController.text.trim().replaceAll(RegExp(r'^0+'), '');
+    if (phone.length != 9 || !RegExp(r'^\d{9}$').hasMatch(phone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى إدخال 9 أرقام صحيحة')),
+      );
+      return;
+    }
     setState(() => _loading = true);
+    final existsResult = await ref.read(authServiceProvider).checkPhone(phone);
+    if (!mounted) { _loading = false; return; }
+    final exists = existsResult is Success<bool> && existsResult.data;
+    if (!exists) {
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('رقم الجوال غير مسجل')),
+      );
+      return;
+    }
     final result = await ref.read(authActionProvider.notifier).generateOtp(phone);
     if (!mounted) { _loading = false; return; }
     setState(() => _loading = false);
@@ -76,6 +93,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 label: 'رقم الجوال',
                 hint: '7xxxxxxxx',
                 keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 prefix: Icon(Icons.phone, color: scheme.onSurfaceVariant),
               ),
               const SizedBox(height: 24),

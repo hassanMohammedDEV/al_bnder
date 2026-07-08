@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:intl/intl.dart';
+
 import '../../../../core/helpers/error_messages.dart';
 import '../../models/player_ad.dart';
 import '../../providers/player_ad_provider.dart';
@@ -296,7 +298,7 @@ class _PlayerAdCard extends ConsumerWidget {
               if (ad.days.isNotEmpty)
                 _InfoRow(icon: Icons.calendar_today, text: 'الأيام: ${ad.days.map(_dayName).join(' - ')}'),
               if (ad.date != null)
-                _InfoRow(icon: Icons.event, text: 'التاريخ: ${ad.date!} (${_dayNameFromDate(ad.date!)})'),
+                _InfoRow(icon: Icons.event, text: 'التاريخ: ${_dayNameFromDate(ad.date!)} ${_formatDate(ad.date!)}'),
               if (ad.startTime != null)
                 _InfoRow(icon: Icons.access_time, text: '${ad.startTime} - ${ad.endTime ?? ''}'),
               if (ad.facilityName != null && ad.facilityName!.isNotEmpty)
@@ -305,7 +307,7 @@ class _PlayerAdCard extends ConsumerWidget {
                 _InfoRow(icon: Icons.sports, text: ad.position!),
             ] else ...[
               if (ad.date != null)
-                _InfoRow(icon: Icons.event, text: 'التاريخ: ${ad.date!} (${_dayNameFromDate(ad.date!)})'),
+                _InfoRow(icon: Icons.event, text: 'التاريخ: ${_dayNameFromDate(ad.date!)} ${_formatDate(ad.date!)}'),
               if (ad.startTime != null)
                 _InfoRow(icon: Icons.access_time, text: '${ad.startTime} - ${ad.endTime ?? ''}'),
               if (ad.facilityName != null && ad.facilityName!.isNotEmpty)
@@ -387,6 +389,16 @@ class _PlayerAdCard extends ConsumerWidget {
       case 6: return 'السبت';
       case 7: return 'الأحد';
       default: return '';
+    }
+  }
+
+  String _formatDate(String dateStr) {
+    final dt = DateTime.tryParse(dateStr);
+    if (dt == null) return dateStr;
+    try {
+      return DateFormat('d MMMM y', 'ar').format(dt);
+    } catch (_) {
+      return dateStr;
     }
   }
 
