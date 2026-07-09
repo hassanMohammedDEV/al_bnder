@@ -28,12 +28,15 @@ class _HomeTabState extends ConsumerState<HomeTab> {
     final selectedId = ref.watch(selectedGroupProvider);
     final selectedGroup = groups.where((g) => g.id == selectedId).firstOrNull;
 
-    // Auto-select first active group
-    if (selectedId == null && groups.isNotEmpty) {
-      final firstActive = groups.where((g) => g.isActive).firstOrNull ?? groups.first;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(selectedGroupProvider.notifier).select(firstActive.id);
-      });
+    // Auto-select first active group if none selected or saved group is invalid
+    if (groups.isNotEmpty) {
+      final savedValid = selectedId != null && groups.any((g) => g.id == selectedId && g.isActive);
+      if (!savedValid) {
+        final firstActive = groups.where((g) => g.isActive).firstOrNull ?? groups.first;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(selectedGroupProvider.notifier).select(firstActive.id);
+        });
+      }
     }
 
     return RefreshIndicator(

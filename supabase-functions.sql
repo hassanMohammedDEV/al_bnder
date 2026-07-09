@@ -165,6 +165,7 @@ BEGIN
 
   v_group_id := v_facility.group_id;
 
+  v_deposit_amount := 5000;
   SELECT COALESCE(deposit_amount, 5000) INTO v_deposit_amount
   FROM group_settings WHERE facility_group_id = v_group_id;
 
@@ -790,6 +791,7 @@ BEGIN
   v_group_id := v_facility.group_id;
 
   -- Fetch deposit amount
+  v_deposit_amount := 5000;
   SELECT COALESCE(deposit_amount, 5000) INTO v_deposit_amount
   FROM group_settings WHERE facility_group_id = v_group_id;
 
@@ -1049,6 +1051,7 @@ BEGIN
   END IF;
 
   -- Fetch deposit amount for this facility group
+  v_deposit_amount := 5000;
   SELECT COALESCE(deposit_amount, 5000) INTO v_deposit_amount
   FROM group_settings
   WHERE facility_group_id = (SELECT group_id FROM facilities WHERE id = v_booking.facility_id);

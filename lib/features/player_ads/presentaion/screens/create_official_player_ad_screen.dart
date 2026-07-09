@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../providers/player_ad_provider.dart';
 import '../../../facilities/providers/facility_provider.dart';
 import '../../../facilities/providers/selected_group_provider.dart';
+import '../../../../presentaion/shared/time_picker_dialog.dart';
 
 class CreateOfficialPlayerAdScreen extends ConsumerStatefulWidget {
   const CreateOfficialPlayerAdScreen({super.key});
@@ -20,7 +21,7 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
   TimeOfDay? _endTime;
   String? _selectedFacilityId;
   String? _selectedFacilityName;
-  String? _date;
+  DateTime? _pickedDate;
   int _playersNeeded = 1;
   String? _position;
   final _notesCtrl = TextEditingController();
@@ -45,7 +46,7 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
   }
 
   Future<void> _pickTime({required bool isStart}) async {
-    final initial = isStart ? (_startTime ?? const TimeOfDay(hour: 8, minute: 0)) : (_endTime ?? const TimeOfDay(hour: 22, minute: 0));
+    final initial = isStart ? (_startTime ?? const TimeOfDay(hour: 17, minute: 0)) : (_endTime ?? const TimeOfDay(hour: 22, minute: 0));
     final picked = await showTimePicker(
       context: context,
       initialTime: initial,
@@ -73,8 +74,13 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
       lastDate: DateTime.now().add(const Duration(days: 3)),
     );
     if (picked != null) {
-      setState(() => _date = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}');
+      setState(() => _pickedDate = picked);
     }
+  }
+
+  String _dateLabel() {
+    if (_pickedDate == null) return 'اختر التاريخ';
+    return dateLabelWithDay(_pickedDate!);
   }
 
   String _timeToString(TimeOfDay t) {
@@ -100,7 +106,7 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
       return;
     }
 
-    if (_date == null) {
+    if (_pickedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('اختر التاريخ')),
       );
@@ -116,15 +122,19 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
 
     setState(() => _isSubmitting = true);
 
+    final dayNames = ['', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    final day = dayNames[_pickedDate!.weekday];
+    final dateStr = '${_pickedDate!.year}-${_pickedDate!.month.toString().padLeft(2, '0')}-${_pickedDate!.day.toString().padLeft(2, '0')}';
+
     final data = <String, dynamic>{
       'p_facility_group_id': groupId,
       'p_type': _type,
-      'p_days': _selectedDays.toList(),
+      'p_days': [day],
       'p_start_time': _startTime != null ? _timeToString(_startTime!) : null,
       'p_end_time': _endTime != null ? _timeToString(_endTime!) : null,
       'p_facility_id': _selectedFacilityId,
       'p_facility_name': _selectedFacilityName,
-      'p_date': _date,
+      'p_date': dateStr,
       'p_players_needed': _playersNeeded,
       'p_position': _position,
       'p_notes': _notesCtrl.text.trim(),
@@ -243,7 +253,7 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
                     children: [
                       Icon(Icons.calendar_today, size: 18, color: scheme.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      Text(_date ?? 'اختر التاريخ', style: TextStyle(color: _date != null ? scheme.onSurface : scheme.onSurfaceVariant)),
+                      Text(_dateLabel(), style: TextStyle(color: _pickedDate != null ? scheme.onSurface : scheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -276,7 +286,7 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
                     children: [
                       Icon(Icons.calendar_today, size: 18, color: scheme.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      Text(_date ?? 'اختر التاريخ', style: TextStyle(color: _date != null ? scheme.onSurface : scheme.onSurfaceVariant)),
+                      Text(_dateLabel(), style: TextStyle(color: _pickedDate != null ? scheme.onSurface : scheme.onSurfaceVariant)),
                     ],
                   ),
                 ),

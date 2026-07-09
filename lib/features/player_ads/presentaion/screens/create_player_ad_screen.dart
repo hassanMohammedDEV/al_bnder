@@ -7,6 +7,7 @@ import '../../repositories/player_ad_repository_impl.dart';
 import '../../providers/player_ad_provider.dart';
 import '../../../facilities/providers/facility_provider.dart';
 import '../../../facilities/providers/selected_group_provider.dart';
+import '../../../../presentaion/shared/time_picker_dialog.dart';
 
 class CreatePlayerAdScreen extends ConsumerStatefulWidget {
   const CreatePlayerAdScreen({super.key});
@@ -17,26 +18,15 @@ class CreatePlayerAdScreen extends ConsumerStatefulWidget {
 
 class _CreatePlayerAdScreenState extends ConsumerState<CreatePlayerAdScreen> {
   String _type = 'looking_team';
-  final Set<String> _selectedDays = {};
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
   String? _selectedFacilityId;
   String? _selectedFacilityName;
-  String? _date;
+  DateTime? _pickedDate;
   int _playersNeeded = 1;
   String? _position;
   final _notesCtrl = TextEditingController();
   bool _isSubmitting = false;
-
-  final _days = [
-    ('saturday', 'سبت'),
-    ('sunday', 'أحد'),
-    ('monday', 'اثنين'),
-    ('tuesday', 'ثلاثاء'),
-    ('wednesday', 'أربعاء'),
-    ('thursday', 'خميس'),
-    ('friday', 'جمعة'),
-  ];
 
   final _positions = ['حارس', 'دفاع', 'وسط', 'هجوم'];
 
@@ -47,7 +37,7 @@ class _CreatePlayerAdScreenState extends ConsumerState<CreatePlayerAdScreen> {
   }
 
   Future<void> _pickTime({required bool isStart}) async {
-    final initial = isStart ? (_startTime ?? const TimeOfDay(hour: 8, minute: 0)) : (_endTime ?? const TimeOfDay(hour: 22, minute: 0));
+    final initial = isStart ? (_startTime ?? const TimeOfDay(hour: 17, minute: 0)) : (_endTime ?? const TimeOfDay(hour: 22, minute: 0));
     final picked = await showTimePicker(
       context: context,
       initialTime: initial,
@@ -75,8 +65,13 @@ class _CreatePlayerAdScreenState extends ConsumerState<CreatePlayerAdScreen> {
       lastDate: DateTime.now().add(const Duration(days: 3)),
     );
     if (picked != null) {
-      setState(() => _date = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}');
+      setState(() => _pickedDate = picked);
     }
+  }
+
+  String _dateLabel() {
+    if (_pickedDate == null) return 'اختر التاريخ';
+    return dateLabelWithDay(_pickedDate!);
   }
 
   String _timeToString(TimeOfDay t) {
@@ -102,14 +97,7 @@ class _CreatePlayerAdScreenState extends ConsumerState<CreatePlayerAdScreen> {
       return;
     }
 
-    if (_type == 'looking_team' && _selectedDays.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر الأيام المناسبة لك')),
-      );
-      return;
-    }
-
-    if (_date == null) {
+    if (_pickedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('اختر التاريخ')),
       );
@@ -142,15 +130,19 @@ class _CreatePlayerAdScreenState extends ConsumerState<CreatePlayerAdScreen> {
       return;
     }
 
+    final dayNames = ['', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    final day = dayNames[_pickedDate!.weekday];
+    final dateStr = '${_pickedDate!.year}-${_pickedDate!.month.toString().padLeft(2, '0')}-${_pickedDate!.day.toString().padLeft(2, '0')}';
+
     final data = <String, dynamic>{
       'p_facility_group_id': groupId,
       'p_type': _type,
-      'p_days': _type == 'looking_team' ? _selectedDays.toList() : <String>[],
+      'p_days': _type == 'looking_team' ? [day] : <String>[],
       'p_start_time': _timeToString(_startTime!),
       'p_end_time': _timeToString(_endTime!),
       'p_facility_id': _selectedFacilityId,
       'p_facility_name': _selectedFacilityName,
-      'p_date': _date,
+      'p_date': dateStr,
       if (_type == 'nakusna') 'p_players_needed': _playersNeeded,
       if (_type == 'looking_team') 'p_position': _position,
       if (_notesCtrl.text.trim().isNotEmpty) 'p_notes': _notesCtrl.text.trim(),
@@ -215,24 +207,6 @@ class _CreatePlayerAdScreenState extends ConsumerState<CreatePlayerAdScreen> {
             const SizedBox(height: 24),
 
             if (_type == 'looking_team') ...[
-              // Days selection
-              Text('الأيام المناسبة', style: TextStyle(fontWeight: FontWeight.w600, color: scheme.onSurface)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: _days.map((d) => FilterChip(
-                  label: Text(d.$2, style: const TextStyle(fontSize: 13)),
-                  selected: _selectedDays.contains(d.$1),
-                  onSelected: (v) {
-                    setState(() {
-                      if (v) { _selectedDays.add(d.$1); } else { _selectedDays.remove(d.$1); }
-                    });
-                  },
-                )).toList(),
-              ),
-              const SizedBox(height: 20),
-
               // Date picker
               Text('تاريخ اللعب', style: TextStyle(fontWeight: FontWeight.w600, color: scheme.onSurface)),
               const SizedBox(height: 8),
@@ -248,7 +222,7 @@ class _CreatePlayerAdScreenState extends ConsumerState<CreatePlayerAdScreen> {
                     children: [
                       Icon(Icons.calendar_today, size: 18, color: scheme.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      Text(_date ?? 'اختر التاريخ', style: TextStyle(color: _date != null ? scheme.onSurface : scheme.onSurfaceVariant)),
+                      Text(_dateLabel(), style: TextStyle(color: _pickedDate != null ? scheme.onSurface : scheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -283,7 +257,7 @@ class _CreatePlayerAdScreenState extends ConsumerState<CreatePlayerAdScreen> {
                     children: [
                       Icon(Icons.calendar_today, size: 18, color: scheme.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      Text(_date ?? 'اختر التاريخ', style: TextStyle(color: _date != null ? scheme.onSurface : scheme.onSurfaceVariant)),
+                      Text(_dateLabel(), style: TextStyle(color: _pickedDate != null ? scheme.onSurface : scheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
