@@ -6,7 +6,7 @@
 - Recurring bookings per-instance cancel, cancel_booking_instance RPC
 - Official admin pinned ads: is_official + pinned_at DB + create_official_player_ad RPC
 - JWT/session in FlutterSecureStorage
-- Minimum booking 60 min, pending does NOT block slots
+- Minimum booking 60 min, pending does NOT block slots (display or conflict check)
 - Delete account requires typing "حذف"
 
 ## Before coding

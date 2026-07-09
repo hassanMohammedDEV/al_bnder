@@ -723,11 +723,11 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM booking_instances bi
     WHERE bi.facility_id = p_facility_id
-      AND bi.status IN ('confirmed', 'pending', 'pending_approval')
+      AND bi.status IN ('confirmed', 'pending_approval')
       AND bi.start_at < p_end_at
       AND bi.end_at > p_start_at
       FOR UPDATE
-  ) THEN
+    ) THEN
     RETURN jsonb_build_object(
       'success', false,
       'message', 'هذا الوقت محجوز مسبقاً',
@@ -960,7 +960,7 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM booking_instances bi
     WHERE bi.facility_id = p_facility_id
-      AND bi.status IN ('confirmed', 'pending', 'pending_approval')
+      AND bi.status IN ('confirmed', 'pending_approval')
       AND bi.start_at < p_end_at
       AND bi.end_at > p_start_at
       FOR UPDATE
