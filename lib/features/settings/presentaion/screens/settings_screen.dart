@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../announcements/providers/announcement_provider.dart';
@@ -193,6 +194,16 @@ class SettingsScreen extends ConsumerWidget {
         Card(
           child: Column(
             children: [
+              ListTile(
+                leading: Icon(Icons.share_outlined, color: scheme.primary),
+                title: const Text('مشاركة التطبيق'),
+                subtitle: const Text('أرسل رابط التطبيق لأصدقائك'),
+                trailing: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
+                onTap: () => Share.share(
+                  'ملاعب البندر - تطبيق حجز الملاعب\nhttps://play.google.com/store/apps/details?id=com.al_bndr.app',
+                ),
+              ),
+              const Divider(height: 1),
               ListTile(
                 leading: Icon(Icons.info_outline, color: scheme.primary),
                 title: const Text('الإصدار'),
