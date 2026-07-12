@@ -16,7 +16,7 @@ class BookingDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final bookingsState = ref.watch(myBookingsProvider);
-    final bookings = bookingsState.data ?? [];
+    final bookings = bookingsState.data?.items ?? [];
     final booking = bookings.where((b) => b.id == bookingId).firstOrNull;
 
     final canCancel = () {

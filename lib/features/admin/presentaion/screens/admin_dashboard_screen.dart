@@ -18,12 +18,16 @@ class AdminDashboardScreen extends ConsumerWidget {
     final statsAsync = ref.watch(dashboardProvider);
     final auth = ref.watch(authStateProvider);
     final isSuperAdmin = auth.role == 'super_admin';
+    final period = ref.watch(dashboardPeriodProvider);
 
     final body = RefreshIndicator(
       onRefresh: () async => ref.invalidate(dashboardProvider),
       child: ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Period filter
+        _PeriodFilter(period: period),
+        const SizedBox(height: 16),
         statsAsync.when(
           data: (groups) {
             if (groups.isEmpty) return const SizedBox.shrink();
@@ -198,6 +202,64 @@ class AdminDashboardScreen extends ConsumerWidget {
   }
 }
 
+class _PeriodFilter extends ConsumerWidget {
+  final DashboardPeriod period;
+  const _PeriodFilter({required this.period});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = DateTime.now();
+    final isThisMonth = period.from?.year == now.year && period.from?.month == now.month;
+    final isLastMonth = period.from != null && (
+      period.from!.year == (now.month == 1 ? now.year - 1 : now.year) &&
+      period.from!.month == (now.month == 1 ? 12 : now.month - 1)
+    );
+    final isAll = period.from == null;
+
+    return SizedBox(
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          FilterChip(
+            label: Text('هذا الشهر', style: const TextStyle(fontSize: 13)),
+            selected: isThisMonth,
+            onSelected: (_) {
+              ref.read(dashboardPeriodProvider.notifier).state = DashboardPeriod(
+                from: DateTime(now.year, now.month, 1),
+                to: now,
+                label: 'هذا الشهر',
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+          FilterChip(
+            label: Text('الشهر الماضي', style: const TextStyle(fontSize: 13)),
+            selected: isLastMonth,
+            onSelected: (_) {
+              final lastMonth = DateTime(now.year, now.month - 1, 1);
+              final lastMonthEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
+              ref.read(dashboardPeriodProvider.notifier).state = DashboardPeriod(
+                from: lastMonth,
+                to: lastMonthEnd,
+                label: 'الشهر الماضي',
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+          FilterChip(
+            label: Text('الكل', style: const TextStyle(fontSize: 13)),
+            selected: isAll,
+            onSelected: (_) {
+              ref.read(dashboardPeriodProvider.notifier).state = const DashboardPeriod(label: 'الكل');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StatsSection extends StatelessWidget {
   final List<GroupStats> groups;
   final GroupStats totals;
@@ -285,29 +347,6 @@ class _StatsSection extends StatelessWidget {
               icon: Icons.schedule,
               color: Colors.blue,
             )),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Revenue / deposits
-        Row(
-          children: [
-            Expanded(
-              child: _StatCard(
-                title: 'الإيرادات',
-                value: '${totals.totalRevenue.toStringAsFixed(0)} ر.ي',
-                icon: Icons.trending_up,
-                color: Colors.teal,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _StatCard(
-                title: 'الإيداعات',
-                value: '${totals.totalDeposits.toStringAsFixed(0)} ر.ي',
-                icon: Icons.account_balance,
-                color: Colors.indigo,
-              ),
-            ),
           ],
         ),
         // Per-group breakdown for super_admin

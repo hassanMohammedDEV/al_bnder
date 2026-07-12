@@ -1,3 +1,33 @@
+import 'package:app_platform_core/core.dart';
+
+class WalletPaginatedState {
+  final String walletId;
+  final double balance;
+  final String facilityGroupId;
+  final Paginated<WalletTransaction> transactions;
+
+  const WalletPaginatedState({
+    required this.walletId,
+    required this.balance,
+    required this.facilityGroupId,
+    required this.transactions,
+  });
+
+  WalletPaginatedState copyWith({
+    String? walletId,
+    double? balance,
+    String? facilityGroupId,
+    Paginated<WalletTransaction>? transactions,
+  }) {
+    return WalletPaginatedState(
+      walletId: walletId ?? this.walletId,
+      balance: balance ?? this.balance,
+      facilityGroupId: facilityGroupId ?? this.facilityGroupId,
+      transactions: transactions ?? this.transactions,
+    );
+  }
+}
+
 class WalletInfo {
   final String id;
   final double balance;

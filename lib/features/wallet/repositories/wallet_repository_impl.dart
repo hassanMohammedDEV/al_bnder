@@ -16,9 +16,11 @@ class WalletRepositoryImpl implements WalletRepository {
   WalletRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient;
 
   @override
-  Future<Result<WalletInfo>> getWallet(String facilityGroupId) {
+  Future<Result<WalletPaginatedState>> getWallet(String facilityGroupId, {Pagination? pagination}) {
     return _apiClient.post('rpc/get_my_wallet', body: {
       'p_facility_group_id': facilityGroupId,
+      if (pagination != null) 'p_page': pagination.page,
+      if (pagination != null) 'p_page_size': pagination.limit,
     }, parser: (json) {
       final data = (json as Map<String, dynamic>)['data'] as Map<String, dynamic>;
       final txs = (data['transactions'] as List?)?.map((t) => WalletTransaction(
@@ -31,11 +33,20 @@ class WalletRepositoryImpl implements WalletRepository {
         createdAt: t['created_at'],
       )).toList() ?? [];
 
-      return WalletInfo(
-        id: data['wallet_id'],
+      final totalCount = data['total_count'] as int? ?? txs.length;
+      final effectivePage = pagination ?? const Pagination(page: 0, limit: 20);
+
+      return WalletPaginatedState(
+        walletId: data['wallet_id'],
         balance: (data['balance'] as num).toDouble(),
         facilityGroupId: data['facility_group_id'],
-        transactions: txs,
+        transactions: Paginated<WalletTransaction>(
+          items: txs,
+          pagination: effectivePage,
+          hasNext: pagination != null
+              ? effectivePage.page * effectivePage.limit + txs.length < totalCount
+              : false,
+        ),
       );
     });
   }

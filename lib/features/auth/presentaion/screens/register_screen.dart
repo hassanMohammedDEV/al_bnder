@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -127,13 +128,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             TextSpan(
                               text: 'سياسة الخصوصية',
                               style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600),
-                              recognizer: null,
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => context.push('/privacy'),
                             ),
                             const TextSpan(text: ' و '),
                             TextSpan(
                               text: 'شروط الاستخدام',
                               style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600),
-                              recognizer: null,
+                              recognizer: TapGestureRecognizer()
+                                ..onTap = () => context.push('/terms'),
                             ),
                           ],
                         ),

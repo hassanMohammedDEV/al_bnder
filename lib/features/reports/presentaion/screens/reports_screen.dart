@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/helpers/error_helper.dart';
 import '../../../../presentaion/shared/time_picker_dialog.dart';
-import '../../../auth/providers/auth_provider.dart';
 import '../../../facilities/providers/facility_provider.dart';
 import '../../../facilities/providers/selected_group_provider.dart';
 import '../../repositories/reports_repository_impl.dart';
@@ -41,8 +40,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
     setState(() { _loading = true; _walletOps = []; _analytics = null; });
     final groupId = ref.read(selectedGroupProvider);
-    final auth = ref.read(authStateProvider);
-    final isAdmin = auth.role == 'facility_admin' || auth.role == 'super_admin';
 
     final result = await ref.read(reportsRepositoryProvider).searchBookingsByDateRange(
       facilityGroupId: groupId,
@@ -58,7 +55,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       },
     );
 
-    if (isAdmin && groupId != null) {
+    if (groupId != null) {
       final opsResult = await ref.read(reportsRepositoryProvider).getWalletOperations(
         facilityGroupId: groupId,
         startDate: _startDate!,

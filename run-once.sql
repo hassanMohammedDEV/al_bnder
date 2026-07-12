@@ -1440,4 +1440,477 @@ $$;
 
 GRANT EXECUTE ON FUNCTION reset_password TO anon, authenticated;
 
+-- ============================================================
+-- 18. جدول تسوية المطور
+-- ============================================================
+CREATE TABLE IF NOT EXISTS developer_settlements (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  facility_group_id UUID NOT NULL REFERENCES facility_groups(id) ON DELETE CASCADE,
+  amount          DECIMAL(10,2) NOT NULL CHECK (amount > 0),
+  notes           TEXT,
+  created_at      TIMESTAMPTZ DEFAULT now(),
+  created_by      UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE
+);
+
+-- 19. إضافة developer_settled للحجوزات
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS developer_settled BOOLEAN DEFAULT false;
+
+-- 20. RPC: تسوية حجوزات المطور
+CREATE OR REPLACE FUNCTION record_developer_settlement(
+  p_facility_group_id UUID,
+  p_amount            DECIMAL(10,2) DEFAULT 0,
+  p_notes             TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id UUID;
+  v_role     TEXT;
+  v_count    INT;
+BEGIN
+  v_admin_id := auth.uid();
+  SELECT role INTO v_role FROM profiles WHERE id = v_admin_id;
+  IF v_role != 'super_admin' THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  UPDATE bookings SET developer_settled = true
+  WHERE facility_id IN (SELECT id FROM facilities WHERE group_id = p_facility_group_id)
+    AND status = 'confirmed'
+    AND developer_settled = false;
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+
+  INSERT INTO developer_settlements (facility_group_id, amount, notes, created_by)
+  VALUES (p_facility_group_id, p_amount, COALESCE(p_notes, 'تم تسوية ' || v_count || ' حجوزات'), v_admin_id);
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم تسوية ' || v_count || ' حجوزات', 'data', null);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION record_developer_settlement TO authenticated;
+
+-- ============================================================
+-- 22. تحديث get_my_bookings مع pagination (p_page, p_page_size)
+-- ============================================================
+DROP FUNCTION IF EXISTS get_my_bookings(TEXT, UUID);
+DROP FUNCTION IF EXISTS get_my_bookings(TEXT, UUID, INT, INT);
+
+CREATE OR REPLACE FUNCTION get_my_bookings(
+  p_status TEXT DEFAULT NULL,
+  p_facility_group_id UUID DEFAULT NULL,
+  p_page INT DEFAULT 0,
+  p_page_size INT DEFAULT 0
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id    UUID;
+  v_bookings   JSONB;
+  v_total      INT;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'يرجى تسجيل الدخول أولاً', 'data', null);
+  END IF;
+
+  SELECT COUNT(*) INTO v_total
+  FROM bookings b
+  JOIN facilities f ON f.id = b.facility_id
+  JOIN facility_groups fg ON fg.id = f.group_id
+  WHERE b.user_id = v_user_id
+    AND (p_status IS NULL OR b.status = p_status)
+    AND (p_facility_group_id IS NULL OR fg.id = p_facility_group_id);
+
+  WITH booking_page AS (
+    SELECT b.id
+    FROM bookings b
+    JOIN facilities f ON f.id = b.facility_id
+    JOIN facility_groups fg ON fg.id = f.group_id
+    WHERE b.user_id = v_user_id
+      AND (p_status IS NULL OR b.status = p_status)
+      AND (p_facility_group_id IS NULL OR fg.id = p_facility_group_id)
+    ORDER BY b.created_at DESC
+    LIMIT NULLIF(p_page_size, 0) OFFSET (p_page * NULLIF(p_page_size, 0))
+  )
+  SELECT jsonb_agg(jsonb_build_object(
+    'id', b.id,
+    'user_id', b.user_id,
+    'facility_id', b.facility_id,
+    'facility_name', f.name,
+    'group_name', fg.name,
+    'group_id', fg.id,
+    'total_price', b.total_price,
+    'paid_amount', b.paid_amount,
+    'status', b.status,
+    'payment_status', b.payment_status,
+    'is_recurring', b.is_recurring,
+    'recurring_rule', b.recurring_rule,
+    'created_at', b.created_at,
+    'is_admin_booking', b.is_admin_booking,
+    'instances', (
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', bi.id,
+        'start_at', bi.start_at,
+        'end_at', bi.end_at,
+        'status', bi.status,
+        'qr_token', bi.qr_token
+      ) ORDER BY bi.start_at)
+      FROM booking_instances bi
+      WHERE bi.booking_id = b.id
+    )
+  ) ORDER BY b.created_at DESC) INTO v_bookings
+  FROM bookings b
+  JOIN facilities f ON f.id = b.facility_id
+  JOIN facility_groups fg ON fg.id = f.group_id
+  WHERE b.id IN (SELECT id FROM booking_page);
+
+  IF v_bookings IS NULL THEN
+    v_bookings := '[]'::JSONB;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم جلب البيانات بنجاح',
+    'data', jsonb_build_object(
+      'bookings', v_bookings,
+      'total_count', v_total
+    )
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_my_bookings TO authenticated;
+
+-- ============================================================
+-- 23. دوال التنظيف للمشرف العام
+-- ============================================================
+CREATE OR REPLACE FUNCTION admin_cleanup(
+  p_type TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id UUID;
+  v_role     TEXT;
+  v_count    INT := 0;
+  v_message  TEXT;
+BEGIN
+  v_admin_id := auth.uid();
+  SELECT role INTO v_role FROM profiles WHERE id = v_admin_id;
+  IF v_role != 'super_admin' THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  CASE p_type
+    WHEN 'expired_otp' THEN
+      DELETE FROM otp_codes WHERE expires_at < now();
+      GET DIAGNOSTICS v_count = ROW_COUNT;
+      v_message := 'تم حذف ' || v_count || ' رمز تحقق منتهي الصلاحية';
+
+    WHEN 'old_player_ads' THEN
+      DELETE FROM player_ads
+      WHERE status IN ('cancelled', 'completed')
+        AND created_at < now() - INTERVAL '3 months';
+      GET DIAGNOSTICS v_count = ROW_COUNT;
+      v_message := 'تم حذف ' || v_count || ' إعلان قديم';
+
+    WHEN 'old_notifications' THEN
+      IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'notifications') THEN
+        DELETE FROM notifications WHERE created_at < now() - INTERVAL '6 months';
+        GET DIAGNOSTICS v_count = ROW_COUNT;
+      END IF;
+      v_message := 'تم حذف ' || v_count || ' إشعار قديم';
+
+    WHEN 'old_cancelled_instances' THEN
+      DELETE FROM booking_instances
+      WHERE status = 'cancelled'
+        AND end_at < now() - INTERVAL '6 months';
+      GET DIAGNOSTICS v_count = ROW_COUNT;
+      v_message := 'تم حذف ' || v_count || ' موعد ملغي قديم';
+
+    ELSE
+      RETURN jsonb_build_object('success', false, 'message', 'نوع تنظيف غير معروف: ' || p_type, 'data', null);
+  END CASE;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', v_message,
+    'data', jsonb_build_object('deleted_count', v_count)
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_cleanup TO authenticated;
+
+-- ============================================================
+-- 23. فهرسة لتحسين الأداء (ما يغير سلوك التطبيق)
+-- ============================================================
+CREATE INDEX IF NOT EXISTS idx_bookings_facility_status ON bookings(facility_id, status);
+CREATE INDEX IF NOT EXISTS idx_bookings_facility_status_created ON bookings(facility_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_bookings_settled ON bookings(developer_settled) WHERE developer_settled = false;
+CREATE INDEX IF NOT EXISTS idx_wt_wallet_created ON wallet_transactions(wallet_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wt_created ON wallet_transactions(created_at);
+CREATE INDEX IF NOT EXISTS idx_bi_start_at ON booking_instances(start_at);
+
+-- ============================================================
+-- 24. تحديث get_my_wallet مع pagination (p_page, p_page_size)
+-- ============================================================
+DROP FUNCTION IF EXISTS get_my_wallet(UUID);
+DROP FUNCTION IF EXISTS get_my_wallet(UUID, INT, INT);
+
+CREATE OR REPLACE FUNCTION get_my_wallet(
+  p_facility_group_id UUID,
+  p_page INT DEFAULT 0,
+  p_page_size INT DEFAULT 0
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id   UUID;
+  v_wallet    wallets%ROWTYPE;
+  v_txns      JSONB;
+  v_total     INT;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'message', 'يرجى تسجيل الدخول أولاً', 'data', null);
+  END IF;
+
+  SELECT * INTO v_wallet
+  FROM wallets
+  WHERE user_id = v_user_id AND facility_group_id = p_facility_group_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'message', 'المحفظة غير موجودة', 'data', null);
+  END IF;
+
+  SELECT COUNT(*) INTO v_total
+  FROM wallet_transactions wt
+  WHERE wt.wallet_id = v_wallet.id;
+
+  WITH tx_page AS (
+    SELECT id
+    FROM wallet_transactions
+    WHERE wallet_id = v_wallet.id
+    ORDER BY created_at DESC
+    LIMIT NULLIF(p_page_size, 0) OFFSET (p_page * NULLIF(p_page_size, 0))
+  )
+  SELECT jsonb_agg(jsonb_build_object(
+    'id', wt.id,
+    'amount', wt.amount,
+    'type', wt.type,
+    'reference_type', wt.reference_type,
+    'reference_id', wt.reference_id,
+    'description', wt.description,
+    'created_at', wt.created_at
+  ) ORDER BY wt.created_at DESC) INTO v_txns
+  FROM wallet_transactions wt
+  WHERE wt.id IN (SELECT id FROM tx_page);
+
+  IF v_txns IS NULL THEN
+    v_txns := '[]'::JSONB;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم جلب البيانات بنجاح',
+    'data', jsonb_build_object(
+      'wallet_id', v_wallet.id,
+      'balance', v_wallet.balance,
+      'facility_group_id', v_wallet.facility_group_id,
+      'transactions', v_txns,
+      'total_count', v_total
+    )
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_my_wallet TO authenticated;
+
+-- ============================================================
+-- 25. تحديث get_admin_dashboard مع فلترة تاريخ (p_from_date, p_to_date)
+-- ============================================================
+DROP FUNCTION IF EXISTS get_admin_dashboard(UUID);
+DROP FUNCTION IF EXISTS get_admin_dashboard(UUID, DATE, DATE);
+
+CREATE OR REPLACE FUNCTION get_admin_dashboard(
+  p_facility_group_id UUID DEFAULT NULL,
+  p_from_date DATE DEFAULT NULL,
+  p_to_date DATE DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id    UUID;
+  v_admin_role  TEXT;
+  v_admin_group UUID;
+  v_group_id    UUID;
+  v_stats       JSONB;
+BEGIN
+  v_admin_id := auth.uid();
+  SELECT role, facility_group_id INTO v_admin_role, v_admin_group
+  FROM profiles WHERE id = v_admin_id;
+
+  IF v_admin_role = 'facility_admin' THEN
+    v_group_id := v_admin_group;
+  ELSIF v_admin_role = 'facility_viewer' THEN
+    v_group_id := COALESCE(p_facility_group_id, v_admin_group);
+  ELSIF v_admin_role = 'super_admin' THEN
+    v_group_id := p_facility_group_id;
+  ELSE
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  IF v_group_id IS NULL AND v_admin_role = 'super_admin' THEN
+    SELECT jsonb_agg(jsonb_build_object(
+      'group_id', fg.id,
+      'group_name', fg.name,
+      'total_bookings', (SELECT COUNT(*) FROM bookings b
+                         JOIN facilities f ON b.facility_id = f.id
+                         WHERE f.group_id = fg.id
+                           AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                           AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'confirmed_bookings', (SELECT COUNT(*) FROM bookings b
+                             JOIN facilities f ON b.facility_id = f.id
+                             WHERE f.group_id = fg.id AND b.status = 'confirmed'
+                               AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                               AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'pending_bookings', (SELECT COUNT(*) FROM bookings b
+                            JOIN facilities f ON b.facility_id = f.id
+                            WHERE f.group_id = fg.id AND b.status = 'pending'
+                              AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                              AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'pending_approval_bookings', (SELECT COUNT(*) FROM bookings b
+                                    JOIN facilities f ON b.facility_id = f.id
+                                    WHERE f.group_id = fg.id AND b.status = 'pending_approval'
+                                      AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                                      AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'total_revenue', (SELECT COALESCE(SUM(b.total_price), 0) FROM bookings b
+                        JOIN facilities f ON b.facility_id = f.id
+                        WHERE f.group_id = fg.id AND b.payment_status = 'paid'
+                          AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                          AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'total_deposits', (SELECT COALESCE(SUM(wt.amount), 0) FROM wallet_transactions wt
+                         JOIN wallets w ON wt.wallet_id = w.id
+                         WHERE w.facility_group_id = fg.id AND wt.type = 'deposit'
+                           AND (p_from_date IS NULL OR wt.created_at >= p_from_date::TIMESTAMPTZ)
+                           AND (p_to_date IS NULL OR wt.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'developer_due', GREATEST(0, (
+        SELECT COALESCE(SUM(b.total_price), 0) FROM bookings b
+        JOIN facilities f ON b.facility_id = f.id
+        WHERE f.group_id = fg.id AND b.status = 'confirmed'
+      ) - (
+        SELECT COALESCE(SUM(ds.amount), 0) FROM developer_settlements ds
+        WHERE ds.facility_group_id = fg.id
+      )),
+      'developer_due_count', (SELECT COUNT(*) FROM bookings b
+                              JOIN facilities f ON b.facility_id = f.id
+                              WHERE f.group_id = fg.id AND b.status = 'confirmed'
+                                AND b.developer_settled = false),
+      'today_confirmed', (SELECT COUNT(*) FROM bookings b
+                          JOIN facilities f ON b.facility_id = f.id
+                          WHERE f.group_id = fg.id AND b.status = 'confirmed'
+                            AND b.created_at >= CURRENT_DATE),
+      'today_pending', (SELECT COUNT(*) FROM bookings b
+                        JOIN facilities f ON b.facility_id = f.id
+                        WHERE f.group_id = fg.id AND b.status = 'pending'
+                          AND b.created_at >= CURRENT_DATE),
+      'today_pending_approval', (SELECT COUNT(*) FROM bookings b
+                                JOIN facilities f ON b.facility_id = f.id
+                                WHERE f.group_id = fg.id AND b.status = 'pending_approval'
+                                  AND b.created_at >= CURRENT_DATE)
+    )) INTO v_stats
+    FROM facility_groups fg;
+  ELSE
+    SELECT jsonb_build_object(
+      'group_id', fg.id,
+      'group_name', fg.name,
+      'total_bookings', (SELECT COUNT(*) FROM bookings b
+                         JOIN facilities f ON b.facility_id = f.id
+                         WHERE f.group_id = fg.id
+                           AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                           AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'confirmed_bookings', (SELECT COUNT(*) FROM bookings b
+                             JOIN facilities f ON b.facility_id = f.id
+                             WHERE f.group_id = fg.id AND b.status = 'confirmed'
+                               AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                               AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'pending_bookings', (SELECT COUNT(*) FROM bookings b
+                            JOIN facilities f ON b.facility_id = f.id
+                            WHERE f.group_id = fg.id AND b.status = 'pending'
+                              AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                              AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'pending_approval_bookings', (SELECT COUNT(*) FROM bookings b
+                                    JOIN facilities f ON b.facility_id = f.id
+                                    WHERE f.group_id = fg.id AND b.status = 'pending_approval'
+                                      AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                                      AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'total_revenue', (SELECT COALESCE(SUM(b.total_price), 0) FROM bookings b
+                        JOIN facilities f ON b.facility_id = f.id
+                        WHERE f.group_id = fg.id AND b.payment_status = 'paid'
+                          AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                          AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'total_deposits', (SELECT COALESCE(SUM(wt.amount), 0) FROM wallet_transactions wt
+                         JOIN wallets w ON wt.wallet_id = w.id
+                         WHERE w.facility_group_id = fg.id AND wt.type = 'deposit'
+                           AND (p_from_date IS NULL OR wt.created_at >= p_from_date::TIMESTAMPTZ)
+                           AND (p_to_date IS NULL OR wt.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
+      'developer_due', GREATEST(0, (
+        SELECT COALESCE(SUM(b.total_price), 0) FROM bookings b
+        JOIN facilities f ON b.facility_id = f.id
+        WHERE f.group_id = fg.id AND b.status = 'confirmed'
+      ) - (
+        SELECT COALESCE(SUM(ds.amount), 0) FROM developer_settlements ds
+        WHERE ds.facility_group_id = fg.id
+      )),
+      'developer_due_count', (SELECT COUNT(*) FROM bookings b
+                              JOIN facilities f ON b.facility_id = f.id
+                              WHERE f.group_id = fg.id AND b.status = 'confirmed'
+                                AND b.developer_settled = false),
+      'today_confirmed', (SELECT COUNT(*) FROM bookings b
+                          JOIN facilities f ON b.facility_id = f.id
+                          WHERE f.group_id = fg.id AND b.status = 'confirmed'
+                            AND b.created_at >= CURRENT_DATE),
+      'today_pending', (SELECT COUNT(*) FROM bookings b
+                        JOIN facilities f ON b.facility_id = f.id
+                        WHERE f.group_id = fg.id AND b.status = 'pending'
+                          AND b.created_at >= CURRENT_DATE),
+      'today_pending_approval', (SELECT COUNT(*) FROM bookings b
+                                JOIN facilities f ON b.facility_id = f.id
+                                WHERE f.group_id = fg.id AND b.status = 'pending_approval'
+                                  AND b.created_at >= CURRENT_DATE)
+    ) INTO v_stats
+    FROM facility_groups fg
+    WHERE fg.id = v_group_id;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم جلب الإحصائيات بنجاح',
+    'data', v_stats
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_admin_dashboard TO authenticated;
+
 NOTIFY pgrst, 'reload schema';

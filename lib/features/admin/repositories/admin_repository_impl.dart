@@ -24,9 +24,11 @@ class AdminRepositoryImpl implements AdminRepository {
         _authApiClient = authApiClient;
 
   @override
-  Future<Result<Map<String, dynamic>>> getDashboard({String? facilityGroupId}) {
+  Future<Result<Map<String, dynamic>>> getDashboard({String? facilityGroupId, DateTime? startDate, DateTime? endDate}) {
     return _apiClient.post('rpc/get_admin_dashboard', body: {
       'p_facility_group_id': facilityGroupId,
+      if (startDate != null) 'p_from_date': startDate.toIso8601String().substring(0, 10),
+      if (endDate != null) 'p_to_date': endDate.toIso8601String().substring(0, 10),
     }, parser: (json) => json as Map<String, dynamic>);
   }
 

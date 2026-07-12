@@ -1074,7 +1074,7 @@ BEGIN
         UPDATE wallets SET balance = balance + v_refund_amount WHERE id = v_wallet_id;
         INSERT INTO wallet_transactions (wallet_id, amount, type, reference_type, reference_id, description)
         VALUES (v_wallet_id, v_refund_amount, 'refund', 'refund', p_booking_id,
-                'استرداد جزئي (خصم العربون): ' || p_booking_id::TEXT);
+                'استرداد جزئي (خصم العربون)');
         v_refunded := true;
         v_payment_status := 'refunded';
       ELSE
@@ -1193,10 +1193,12 @@ $$;
 -- -------------------------------------------------------
 -- 8. GET MY WALLET
 -- POST /rest/v1/rpc/get_my_wallet
--- Body: { "facility_group_id": "uuid" }
+-- Body: { "facility_group_id": "uuid", "p_page": 0, "p_page_size": 20 }
 -- -------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_my_wallet(
-  p_facility_group_id UUID
+  p_facility_group_id UUID,
+  p_page INT DEFAULT 0,
+  p_page_size INT DEFAULT 0
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -1208,6 +1210,7 @@ DECLARE
   v_user_id   UUID;
   v_wallet    wallets%ROWTYPE;
   v_txns      JSONB;
+  v_total     INT;
 BEGIN
   v_user_id := auth.uid();
   IF v_user_id IS NULL THEN
@@ -1222,6 +1225,17 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'message', 'المحفظة غير موجودة', 'data', null);
   END IF;
 
+  SELECT COUNT(*) INTO v_total
+  FROM wallet_transactions wt
+  WHERE wt.wallet_id = v_wallet.id;
+
+  WITH tx_page AS (
+    SELECT id
+    FROM wallet_transactions
+    WHERE wallet_id = v_wallet.id
+    ORDER BY created_at DESC
+    LIMIT NULLIF(p_page_size, 0) OFFSET (p_page * NULLIF(p_page_size, 0))
+  )
   SELECT jsonb_agg(jsonb_build_object(
     'id', wt.id,
     'amount', wt.amount,
@@ -1232,7 +1246,7 @@ BEGIN
     'created_at', wt.created_at
   ) ORDER BY wt.created_at DESC) INTO v_txns
   FROM wallet_transactions wt
-  WHERE wt.wallet_id = v_wallet.id;
+  WHERE wt.id IN (SELECT id FROM tx_page);
 
   IF v_txns IS NULL THEN
     v_txns := '[]'::JSONB;
@@ -1245,7 +1259,8 @@ BEGIN
       'wallet_id', v_wallet.id,
       'balance', v_wallet.balance,
       'facility_group_id', v_wallet.facility_group_id,
-      'transactions', v_txns
+      'transactions', v_txns,
+      'total_count', v_total
     )
   );
 END;
@@ -1324,12 +1339,14 @@ $$;
 
 
 -- -------------------------------------------------------
--- 10. GET ADMIN DASHBOARD
+-- 10. ADMIN DASHBOARD
 -- POST /rest/v1/rpc/get_admin_dashboard
--- Body: { "facility_group_id": "uuid" }
+-- Body: { "facility_group_id": "uuid", "p_from_date": "2024-01-01", "p_to_date": "2024-01-31" }
 -- -------------------------------------------------------
 CREATE OR REPLACE FUNCTION get_admin_dashboard(
-  p_facility_group_id UUID DEFAULT NULL
+  p_facility_group_id UUID DEFAULT NULL,
+  p_from_date DATE DEFAULT NULL,
+  p_to_date DATE DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -1364,22 +1381,34 @@ BEGIN
       'group_name', fg.name,
       'total_bookings', (SELECT COUNT(*) FROM bookings b
                          JOIN facilities f ON b.facility_id = f.id
-                         WHERE f.group_id = fg.id),
+                         WHERE f.group_id = fg.id
+                           AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                           AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'confirmed_bookings', (SELECT COUNT(*) FROM bookings b
                              JOIN facilities f ON b.facility_id = f.id
-                             WHERE f.group_id = fg.id AND b.status = 'confirmed'),
+                             WHERE f.group_id = fg.id AND b.status = 'confirmed'
+                               AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                               AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'pending_bookings', (SELECT COUNT(*) FROM bookings b
                             JOIN facilities f ON b.facility_id = f.id
-                            WHERE f.group_id = fg.id AND b.status = 'pending'),
+                            WHERE f.group_id = fg.id AND b.status = 'pending'
+                              AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                              AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'pending_approval_bookings', (SELECT COUNT(*) FROM bookings b
                                     JOIN facilities f ON b.facility_id = f.id
-                                    WHERE f.group_id = fg.id AND b.status = 'pending_approval'),
+                                    WHERE f.group_id = fg.id AND b.status = 'pending_approval'
+                                      AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                                      AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'total_revenue', (SELECT COALESCE(SUM(b.total_price), 0) FROM bookings b
                         JOIN facilities f ON b.facility_id = f.id
-                        WHERE f.group_id = fg.id AND b.payment_status = 'paid'),
+                        WHERE f.group_id = fg.id AND b.payment_status = 'paid'
+                          AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                          AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'total_deposits', (SELECT COALESCE(SUM(wt.amount), 0) FROM wallet_transactions wt
                          JOIN wallets w ON wt.wallet_id = w.id
-                         WHERE w.facility_group_id = fg.id AND wt.type = 'deposit'),
+                         WHERE w.facility_group_id = fg.id AND wt.type = 'deposit'
+                           AND (p_from_date IS NULL OR wt.created_at >= p_from_date::TIMESTAMPTZ)
+                           AND (p_to_date IS NULL OR wt.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'developer_due', GREATEST(0, (
         SELECT COALESCE(SUM(b.total_price), 0) FROM bookings b
         JOIN facilities f ON b.facility_id = f.id
@@ -1412,22 +1441,34 @@ BEGIN
       'group_name', fg.name,
       'total_bookings', (SELECT COUNT(*) FROM bookings b
                          JOIN facilities f ON b.facility_id = f.id
-                         WHERE f.group_id = fg.id),
+                         WHERE f.group_id = fg.id
+                           AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                           AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'confirmed_bookings', (SELECT COUNT(*) FROM bookings b
                              JOIN facilities f ON b.facility_id = f.id
-                             WHERE f.group_id = fg.id AND b.status = 'confirmed'),
+                             WHERE f.group_id = fg.id AND b.status = 'confirmed'
+                               AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                               AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'pending_bookings', (SELECT COUNT(*) FROM bookings b
                             JOIN facilities f ON b.facility_id = f.id
-                            WHERE f.group_id = fg.id AND b.status = 'pending'),
+                            WHERE f.group_id = fg.id AND b.status = 'pending'
+                              AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                              AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'pending_approval_bookings', (SELECT COUNT(*) FROM bookings b
                                     JOIN facilities f ON b.facility_id = f.id
-                                    WHERE f.group_id = fg.id AND b.status = 'pending_approval'),
+                                    WHERE f.group_id = fg.id AND b.status = 'pending_approval'
+                                      AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                                      AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'total_revenue', (SELECT COALESCE(SUM(b.total_price), 0) FROM bookings b
                         JOIN facilities f ON b.facility_id = f.id
-                        WHERE f.group_id = fg.id AND b.payment_status = 'paid'),
+                        WHERE f.group_id = fg.id AND b.payment_status = 'paid'
+                          AND (p_from_date IS NULL OR b.created_at >= p_from_date::TIMESTAMPTZ)
+                          AND (p_to_date IS NULL OR b.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'total_deposits', (SELECT COALESCE(SUM(wt.amount), 0) FROM wallet_transactions wt
                          JOIN wallets w ON wt.wallet_id = w.id
-                         WHERE w.facility_group_id = fg.id AND wt.type = 'deposit'),
+                         WHERE w.facility_group_id = fg.id AND wt.type = 'deposit'
+                           AND (p_from_date IS NULL OR wt.created_at >= p_from_date::TIMESTAMPTZ)
+                           AND (p_to_date IS NULL OR wt.created_at < (p_to_date + 1)::TIMESTAMPTZ)),
       'developer_due', GREATEST(0, (
         SELECT COALESCE(SUM(b.total_price), 0) FROM bookings b
         JOIN facilities f ON b.facility_id = f.id
@@ -2894,7 +2935,7 @@ BEGIN
         UPDATE wallets SET balance = balance + v_refund WHERE id = v_wallet_id;
         INSERT INTO wallet_transactions (wallet_id, amount, type, reference_type, reference_id, description, created_by)
         VALUES (v_wallet_id, v_refund, 'refund', 'refund', p_booking_id,
-                'استرداد تقليص حجز: ' || p_booking_id::TEXT, v_admin_id);
+                'استرداد تقليص حجز', v_admin_id);
       END IF;
 
       -- Update booking payment_status to partially refunded
@@ -3238,7 +3279,7 @@ BEGIN
         UPDATE wallets SET balance = balance + v_refund WHERE id = v_wallet_id;
         INSERT INTO wallet_transactions (wallet_id, amount, type, reference_type, reference_id, description, created_by)
         VALUES (v_wallet_id, v_refund, 'refund', 'refund', p_booking_id,
-                'استرداد تعديل حجز: ' || p_booking_id::TEXT, v_admin_id);
+                'استرداد تعديل حجز', v_admin_id);
       END IF;
 
       UPDATE bookings

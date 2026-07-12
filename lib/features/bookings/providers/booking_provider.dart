@@ -10,7 +10,7 @@ import '../repositories/booking_repository_impl.dart';
 import '../../wallet/providers/wallet_provider.dart';
 import '../../facilities/providers/selected_group_provider.dart';
 
-final myBookingsProvider = NotifierProvider<MyBookingsNotifier, BaseState<List<Booking>>>(
+final myBookingsProvider = NotifierProvider<MyBookingsNotifier, BaseState<Paginated<Booking>>>(
   MyBookingsNotifier.new,
 );
 
@@ -22,11 +22,12 @@ final bookingActionProvider = StateNotifierProvider<BookingActionNotifier, Actio
   (ref) => BookingActionNotifier(ref: ref),
 );
 
-class MyBookingsNotifier extends BaseNotifier<List<Booking>> {
+class MyBookingsNotifier extends BaseNotifier<Paginated<Booking>> {
   String? _currentGroupId;
+  String? _currentStatus;
 
   @override
-  BaseState<List<Booking>> build() {
+  BaseState<Paginated<Booking>> build() {
     final selected = ref.read(selectedGroupProvider);
     if (selected != null) {
       _currentGroupId = selected;
@@ -43,14 +44,48 @@ class MyBookingsNotifier extends BaseNotifier<List<Booking>> {
   }
 
   Future<void> load({String? status, String? facilityGroupId}) async {
+    if (status != null) _currentStatus = status;
     setLoading();
     final result = await ref.read(bookingRepositoryProvider).getMyBookings(
-      status: status,
+      status: status ?? _currentStatus,
       facilityGroupId: facilityGroupId ?? _currentGroupId,
+      pagination: const Pagination(page: 0, limit: 20),
     );
     result.when(
       success: (data) => setSuccess(data),
       failure: (e) => setError(e),
+    );
+  }
+
+  Future<void> loadMore() async {
+    final current = state.data;
+    if (current == null || !current.hasNext || current.isLoadingMore) return;
+    final nextPage = current.pagination.next();
+    state = state.copyWith(
+      data: current.copyWith(isLoadingMore: true),
+    );
+    final result = await ref.read(bookingRepositoryProvider).getMyBookings(
+      status: _currentStatus,
+      facilityGroupId: _currentGroupId,
+      pagination: nextPage,
+    );
+    result.when(
+      success: (page) {
+        final allItems = [...current.items, ...page.items];
+        state = state.copyWith(
+          data: current.copyWith(
+            items: allItems,
+            pagination: nextPage,
+            hasNext: page.hasNext,
+            isLoadingMore: false,
+          ),
+        );
+      },
+      failure: (e) {
+        state = state.copyWith(
+          data: current.copyWith(isLoadingMore: false, paginationError: e),
+        );
+      },
     );
   }
 }

@@ -115,7 +115,7 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
     final picked = await showDatePicker(
       context: context,
       firstDate: now,
-      lastDate: now.add(const Duration(days: 90)),
+      lastDate: now.add(const Duration(days: 365)),
       initialDate: form.selectedDate,
     );
     if (picked != null) {

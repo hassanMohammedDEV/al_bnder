@@ -37,9 +37,9 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
     }
 
     final days = _endDate.difference(_startDate).inDays + 1;
-    if (days > 7) {
+    if (days > 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('يمكن اختيار 7 أيام كحد أقصى')),
+        const SnackBar(content: Text('يمكن اختيار 3 أيام كحد أقصى')),
       );
       return;
     }
@@ -81,6 +81,15 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
       cancelText: 'إلغاء',
     );
     if (picked != null) {
+      final days = picked.end.difference(picked.start).inDays + 1;
+      if (days > 3) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('يمكن اختيار 3 أيام كحد أقصى')),
+          );
+        }
+        return;
+      }
       setState(() {
         _startDate = picked.start;
         _endDate = picked.end;

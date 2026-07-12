@@ -7,13 +7,34 @@ import '../models/group_settings.dart';
 import '../models/group_stats.dart';
 import '../repositories/admin_repository_impl.dart';
 
+class DashboardPeriod {
+  final DateTime? from;
+  final DateTime? to;
+  final String label;
+
+  const DashboardPeriod({this.from, this.to, required this.label});
+}
+
+final dashboardPeriodProvider = StateProvider<DashboardPeriod>((ref) {
+  final now = DateTime.now();
+  return DashboardPeriod(
+    from: DateTime(now.year, now.month, 1),
+    to: now,
+    label: 'هذا الشهر',
+  );
+});
+
 final dashboardProvider = FutureProvider<List<GroupStats>>((ref) async {
   // Auto-cancel expired pending_approval bookings
   await ref.read(adminRepositoryProvider).autoCancelExpiredBookings();
   // Auto-delete expired player ads
   await ref.read(adminRepositoryProvider).autoDeleteExpiredPlayerAds();
 
-  final result = await ref.read(adminRepositoryProvider).getDashboard();
+  final period = ref.watch(dashboardPeriodProvider);
+  final result = await ref.read(adminRepositoryProvider).getDashboard(
+    startDate: period.from,
+    endDate: period.to,
+  );
   return result.when(
     success: (data) {
       final raw = data['data'];

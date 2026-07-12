@@ -1,32 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../announcements/providers/announcement_provider.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../facilities/providers/facility_provider.dart';
 import '../../../facilities/providers/selected_group_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
-class SettingsScreen extends ConsumerWidget {
-  final bool inShell;
-  const SettingsScreen({super.key, this.inShell = false});
+class AdminSettingsScreen extends ConsumerWidget {
+  const AdminSettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final themeMode = ref.watch(themeModeProvider);
     final auth = ref.watch(authStateProvider);
-    final isAdmin = auth.role == 'facility_admin' || auth.role == 'super_admin';
     final groupsState = ref.watch(facilityGroupsProvider);
     final selectedGroupId = ref.watch(selectedGroupProvider);
     final groups = groupsState.data ?? [];
     final selectedGroup = groups.where((g) => g.id == selectedGroupId).firstOrNull;
     final managerPhone = selectedGroup?.phone;
 
-    Widget content = ListView(
+    final content = ListView(
       padding: const EdgeInsets.all(16),
       children: [
         // Profile section
@@ -51,17 +48,16 @@ class SettingsScreen extends ConsumerWidget {
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                           Text(auth.phone,
                             style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14)),
-                          if (auth.role != null && auth.role != 'user')
-                            Container(
-                              margin: const EdgeInsets.only(top: 4),
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: scheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(_roleLabel(auth.role!),
-                                style: TextStyle(fontSize: 12, color: scheme.onSecondaryContainer)),
+                          Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: scheme.secondaryContainer,
+                              borderRadius: BorderRadius.circular(8),
                             ),
+                            child: Text(_roleLabel(auth.role ?? ''),
+                              style: TextStyle(fontSize: 12, color: scheme.onSecondaryContainer)),
+                          ),
                         ],
                       ),
                     ),
@@ -76,54 +72,6 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
-        // Admin section (hide when inShell — already in bottom nav)
-        if (isAdmin && !inShell) ...[
-          Card(
-            child: ListTile(
-              leading: Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.admin_panel_settings, color: Colors.orange),
-              ),
-              title: const Text('لوحة الإدارة'),
-              subtitle: Text('إدارة الملاعب والحجوزات', style: TextStyle(color: scheme.onSurfaceVariant)),
-              trailing: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
-              onTap: () => context.go('/admin/dashboard'),
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-        // Announcements (hide when inShell — bell icon already in AppBar)
-        if (!inShell) ...[
-          Card(
-            child: ListTile(
-              leading: Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.campaign, color: scheme.primary),
-              ),
-              title: const Text('الإشعارات'),
-              trailing: Builder(builder: (_) {
-                final count = ref.watch(unreadCountProvider);
-                if (count > 0) {
-                  return Badge(
-                    label: Text('$count'),
-                    child: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
-                  );
-                }
-                return Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant);
-              }),
-              onTap: () => context.push('/announcements'),
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
         // Available slots
         Card(
           child: ListTile(
@@ -199,9 +147,14 @@ class SettingsScreen extends ConsumerWidget {
                 title: const Text('مشاركة التطبيق'),
                 subtitle: const Text('أرسل رابط التطبيق لأصدقائك'),
                 trailing: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
-                onTap: () => Share.share(
-                  'ملاعب البندر - تطبيق حجز الملاعب\nhttps://play.google.com/store/apps/details?id=com.al_bndr.app',
-                ),
+                onTap: () {
+                  Clipboard.setData(const ClipboardData(
+                    text: 'ملاعب البندر - تطبيق حجز الملاعب\nhttps://play.google.com/store/apps/details?id=com.al_bndr.app',
+                  ));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('تم نسخ الرابط')),
+                  );
+                },
               ),
               const Divider(height: 1),
               ListTile(
@@ -408,8 +361,7 @@ class SettingsScreen extends ConsumerWidget {
       ],
     );
 
-    if (inShell) return content;
-    return Scaffold(appBar: AppBar(title: const Text('الإعدادات')), body: content);
+    return content;
   }
 
   String _roleLabel(String role) {

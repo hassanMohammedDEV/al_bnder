@@ -1,3 +1,4 @@
+import 'package:app_platform_core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -30,9 +31,10 @@ class WalletScreen extends ConsumerStatefulWidget {
 
 class _WalletScreenState extends ConsumerState<WalletScreen> {
   Future<void> _refresh() async {
+    final notifier = ref.read(walletInfoProvider.notifier);
     final selected = ref.read(selectedGroupProvider);
     if (selected != null) {
-      ref.invalidate(walletInfoFamilyProvider(selected));
+      notifier.load(facilityGroupId: selected);
     }
     ref.invalidate(facilityGroupsProvider);
     await Future.delayed(const Duration(seconds: 1));
@@ -45,6 +47,13 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     final groupsState = ref.watch(facilityGroupsProvider);
     final groups = groupsState.data ?? [];
 
+    // Sync group changes
+    if (selectedGroup != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(walletInfoProvider.notifier).setGroupId(selectedGroup);
+      });
+    }
+
     Widget body;
     if (selectedGroup == null) {
       body = groups.isEmpty
@@ -54,14 +63,13 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       body = _WalletBody(groupId: selectedGroup, groups: groups, scheme: scheme);
     }
 
-    final scaffold = Scaffold(
-      appBar: AppBar(title: const Text('المحفظة')),
-      body: RefreshIndicator(onRefresh: _refresh, child: body),
-    );
     if (widget.inShell) {
       return RefreshIndicator(onRefresh: _refresh, child: body);
     }
-    return scaffold;
+    return Scaffold(
+      appBar: AppBar(title: const Text('المحفظة')),
+      body: RefreshIndicator(onRefresh: _refresh, child: body),
+    );
   }
 }
 
@@ -78,123 +86,252 @@ class _WalletBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final walletAsync = ref.watch(walletInfoFamilyProvider(groupId));
-    final activeGroups = groups.where((g) => g.isActive).toList();
+    final state = ref.watch(walletInfoProvider);
 
+    final activeGroups = groups.where((g) => g.isActive).toList();
     final selected = groups.where((g) => g.id == groupId).firstOrNull;
     final phone = selected?.phone;
 
-    return walletAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
+    switch (state.status) {
+      case LoadStatus.loading:
+        return ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.6),
+          const Center(child: CircularProgressIndicator()),
+        ]);
+      case LoadStatus.error:
+        return ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+          const SizedBox(height: 100),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: scheme.error),
+                const SizedBox(height: 16),
+                Text(translateError(state.error!), style: TextStyle(color: scheme.error)),
+                ElevatedButton.icon(
+                  onPressed: () => ref.read(walletInfoProvider.notifier).load(),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('إعادة المحاولة'),
+                ),
+              ],
+            ),
+          ),
+        ]);
+      case LoadStatus.success:
+        final wallet = state.data!;
+        return _WalletPaginatedList(
+          wallet: wallet,
+          activeGroups: activeGroups,
+          groupId: groupId,
+          phone: phone,
+          scheme: scheme,
+          onRefresh: () => ref.read(walletInfoProvider.notifier).load(),
+          onLoadMore: () => ref.read(walletInfoProvider.notifier).loadMore(),
+          onGroupSelected: (id) => ref.read(selectedGroupProvider.notifier).select(id),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+class _WalletPaginatedList extends StatefulWidget {
+  final WalletPaginatedState wallet;
+  final List<dynamic> activeGroups;
+  final String groupId;
+  final String? phone;
+  final ColorScheme scheme;
+  final Future<void> Function() onRefresh;
+  final VoidCallback onLoadMore;
+  final void Function(String id) onGroupSelected;
+
+  const _WalletPaginatedList({
+    required this.wallet,
+    required this.activeGroups,
+    required this.groupId,
+    required this.phone,
+    required this.scheme,
+    required this.onRefresh,
+    required this.onLoadMore,
+    required this.onGroupSelected,
+  });
+
+  @override
+  State<_WalletPaginatedList> createState() => _WalletPaginatedListState();
+}
+
+class _WalletPaginatedListState extends State<_WalletPaginatedList> {
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      widget.onLoadMore();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final txs = widget.wallet.transactions;
+    final isLoadingMore = txs.isLoadingMore;
+    final hasMore = txs.hasNext;
+    final allTxs = txs.items;
+    final totalCount = allTxs.length + (txs.pagination.page * txs.pagination.limit);
+
+    // Build header items
+    List<Widget> headers = [];
+
+    headers.add(
+      Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [widget.scheme.primary, widget.scheme.primary.withValues(alpha: 0.8)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 48, color: scheme.error),
-            const SizedBox(height: 16),
-            Text(translateError(e), style: TextStyle(color: scheme.error)),
+            Text('الرصيد الحالي', style: TextStyle(
+              color: widget.scheme.onPrimary.withValues(alpha: 0.8),
+              fontSize: 14,
+            )),
+            const SizedBox(height: 8),
+            Text('${widget.wallet.balance.toStringAsFixed(0)} ر.ي', style: TextStyle(
+              color: widget.scheme.onPrimary,
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
+            )),
           ],
         ),
       ),
-      data: (wallet) => ListView(
-        padding: const EdgeInsets.only(bottom: 24),
-        children: [
-          // Balance card
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [scheme.primary, scheme.primary.withValues(alpha: 0.8)],
-              ),
-              borderRadius: BorderRadius.circular(20),
+    );
+
+    if (widget.phone != null && widget.phone!.isNotEmpty) {
+      headers.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              final url = Uri.parse(_whatsappUrl(widget.phone!));
+              try {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              } catch (_) {}
+            },
+            icon: Icon(Icons.chat, color: const Color(0xFF25D366)),
+            label: Text(
+              'للشحن تواصل واتساب: ${widget.phone}',
+              style: TextStyle(color: const Color(0xFF25D366)),
             ),
-            child: Column(
-              children: [
-                Text('الرصيد الحالي', style: TextStyle(
-                  color: scheme.onPrimary.withValues(alpha: 0.8),
-                  fontSize: 14,
-                )),
-                const SizedBox(height: 8),
-                Text('${wallet.balance.toStringAsFixed(0)} ر.ي', style: TextStyle(
-                  color: scheme.onPrimary,
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                )),
-              ],
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFF25D366)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
           ),
-          // WhatsApp contact for recharge
-          if (phone != null && phone.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  final url = Uri.parse(_whatsappUrl(phone));
-                  try {
-                    await launchUrl(url, mode: LaunchMode.externalApplication);
-                  } catch (_) {}
-                },
-                icon: Icon(Icons.chat, color: const Color(0xFF25D366)),
-                label: Text(
-                  'للشحن تواصل واتساب: $phone',
-                  style: TextStyle(color: const Color(0xFF25D366)),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF25D366)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-          // Group selector (active only)
-          if (activeGroups.length > 1)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: SizedBox(
-                height: 36,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: activeGroups.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) {
-                    final g = activeGroups[i];
-                    return FilterChip(
-                      label: Text(g.name, style: const TextStyle(fontSize: 13)),
-                      selected: g.id == groupId,
-                      onSelected: (_) => ref.read(selectedGroupProvider.notifier).select(g.id),
-                    );
-                  },
-                ),
-              ),
-            ),
-          const SizedBox(height: 16),
-          // Transactions header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Text('الحركات', style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w600, color: scheme.onSurface,
-                )),
-                const Spacer(),
-                Text('${wallet.transactions.length} حركة', style: TextStyle(
-                  color: scheme.onSurfaceVariant, fontSize: 13,
-                )),
-              ],
+        ),
+      );
+    }
+
+    if (widget.activeGroups.length > 1) {
+      headers.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SizedBox(
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: widget.activeGroups.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final g = widget.activeGroups[i];
+                return FilterChip(
+                  label: Text(g.name, style: const TextStyle(fontSize: 13)),
+                  selected: g.id == widget.groupId,
+                  onSelected: (_) => widget.onGroupSelected(g.id),
+                );
+              },
             ),
           ),
-          const SizedBox(height: 8),
-          if (wallet.transactions.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(child: Text('لا توجد حركات', style: TextStyle(color: scheme.onSurfaceVariant))),
-            )
-          else
-            ...wallet.transactions.map((txn) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _TransactionTile(txn: txn, scheme: scheme),
+        ),
+      );
+    }
+
+    headers.add(const SizedBox(height: 16));
+    headers.add(
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Text('الحركات', style: TextStyle(
+              fontSize: 16, fontWeight: FontWeight.w600, color: widget.scheme.onSurface,
             )),
-        ],
+            const Spacer(),
+            Text('$totalCount حركة', style: TextStyle(
+              color: widget.scheme.onSurfaceVariant, fontSize: 13,
+            )),
+          ],
+        ),
+      ),
+    );
+    headers.add(const SizedBox(height: 8));
+
+    final headerCount = headers.length;
+    final itemCount = headerCount + allTxs.length + (hasMore || isLoadingMore ? 1 : 0);
+
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh,
+      child: ListView.builder(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        itemCount: itemCount,
+        itemBuilder: (_, i) {
+          if (i < headerCount) {
+            return headers[i];
+          }
+          final txnIndex = i - headerCount;
+          if (txnIndex >= allTxs.length) {
+            if (txs.paginationError != null) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Text('فشل التحميل', style: TextStyle(color: widget.scheme.error, fontSize: 13)),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: widget.onLoadMore,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: const Text('إعادة المحاولة'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            );
+          }
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _TransactionTile(txn: allTxs[txnIndex], scheme: widget.scheme),
+          );
+        },
       ),
     );
   }

@@ -16,14 +16,22 @@ class BookingRepositoryImpl implements BookingRepository {
   BookingRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient;
 
   @override
-  Future<Result<List<Booking>>> getMyBookings({String? status, String? facilityGroupId}) {
+  Future<Result<Paginated<Booking>>> getMyBookings({String? status, String? facilityGroupId, Pagination? pagination}) {
     return _apiClient.post('rpc/get_my_bookings', body: {
       'p_status': status,
       'p_facility_group_id': facilityGroupId,
+      if (pagination != null) 'p_page': pagination.page,
+      if (pagination != null) 'p_page_size': pagination.limit,
     }, parser: (json) {
-      final data = json as Map<String, dynamic>;
-      final bookings = (data['data'] as Map<String, dynamic>)['bookings'] as List;
-      return bookings.map((e) => Booking.fromMap(e)).toList();
+      final data = (json as Map<String, dynamic>)['data'] as Map<String, dynamic>;
+      final bookings = (data['bookings'] as List).map((e) => Booking.fromMap(e)).toList();
+      final totalCount = data['total_count'] as int? ?? bookings.length;
+      final page = pagination ?? const Pagination(page: 0, limit: 20);
+      return Paginated<Booking>(
+        items: bookings,
+        pagination: page,
+        hasNext: page.page * page.limit + bookings.length < totalCount,
+      );
     });
   }
 

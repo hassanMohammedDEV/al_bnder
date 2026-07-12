@@ -1,7 +1,7 @@
 import 'package:app_platform_core/core.dart';
 
 abstract class AdminRepository {
-  Future<Result<Map<String, dynamic>>> getDashboard({String? facilityGroupId});
+  Future<Result<Map<String, dynamic>>> getDashboard({String? facilityGroupId, DateTime? startDate, DateTime? endDate});
   Future<Result<List<Map<String, dynamic>>>> getPendingBookings({String? facilityGroupId});
   Future<Result<void>> confirmBooking(String bookingId, {double paidAmount = 0});
   Future<Result<Map<String, dynamic>>> depositWallet({

@@ -130,16 +130,28 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
     return false;
   }
 
+  bool _isSlotBlocked(int displayMinute) {
+    final adj = _toAdj(displayMinute);
+    if (adj + _minMin > _adjClose) return true;
+    final nextStart = _nextBookingStartAdj(adj);
+    if (nextStart != null && nextStart < adj + _minMin) return true;
+    return false;
+  }
+
   String? _durationHint(int startAdj) {
     final nextStart = _nextBookingStartAdj(startAdj);
-    if (nextStart != null && nextStart < startAdj + _minMin) {
+    final minEnd = startAdj + _minMin;
+    if (nextStart != null && nextStart < minEnd) {
       final gap = nextStart - startAdj;
       return 'لا يمكن الحجز - يوجد حجز بعدها بـ $gap دقيقة فقط';
     }
+    if (minEnd > _adjClose) {
+      return 'لا يمكن الحجز - الوقت المتبقي أقل من ساعة';
+    }
     final limitByBooking = nextStart != null && nextStart < startAdj + _maxMin && nextStart < _adjClose;
-    if (limitByBooking) return 'يتوفر حتى ${_fmt(_toDisplay(nextStart))} - يوجد حجز';
+    if (limitByBooking) return 'المدة محدودة بسبب وجود حجز بعد ${_fmt(_toDisplay(nextStart))}';
     final limitByClosing = _adjClose < startAdj + _maxMin;
-    if (limitByClosing) return 'آخر موعد متاح ${_fmt(_toDisplay(_adjClose))}';
+    if (limitByClosing) return 'آخر وقت للمدة ${_fmt(_toDisplay(_adjClose))}';
     return null;
   }
 
@@ -208,6 +220,10 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
       statusText = 'اختر من الأوقات المتاحة بالأسفل';
       statusIcon = Icons.arrow_downward;
       statusColor = scheme.primary;
+    } else if (_endAdj == null && durations.isEmpty) {
+      statusText = 'لا يمكن الحجز - مدة الحجز لا تقل عن ساعة';
+      statusIcon = Icons.warning_amber_rounded;
+      statusColor = Colors.orange;
     } else if (_endAdj == null) {
       statusText = 'اخترت ${_fmt(_toDisplay(_startAdj!))}، اختر المدة';
       statusIcon = Icons.timer_outlined;
@@ -268,7 +284,7 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
               label: 'متاح',
             ),
             const SizedBox(width: 12),
-            _LegendChip(color: isDark ? Colors.red.shade300.withAlpha(80) : Colors.red.shade100, label: 'محجوز'),
+            _LegendChip(color: isDark ? Colors.red.shade300.withAlpha(80) : Colors.red.shade100, label: 'محجوز / غير متاح'),
           ],
         ),
         const SizedBox(height: 12),
@@ -281,7 +297,7 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
           runSpacing: 6,
           children: startSlots.map((minute) {
             final adj = _toAdj(minute);
-            final booked = _isBooked(minute);
+            final unavailable = _isBooked(minute) || _isSlotBlocked(minute);
             final isSelected = _startAdj == adj;
             final inFine = _toDisplay(adj) >= widget.fineFromMinutes &&
                 _toDisplay(adj) < widget.fineToMinutes;
@@ -292,7 +308,7 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: booked
+                  color: unavailable
                       ? scheme.error
                       : isSelected
                           ? scheme.onPrimary
@@ -300,9 +316,9 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
                 ),
               ),
               selected: isSelected,
-              onSelected: booked ? null : (_) => _onStartTap(minute),
+              onSelected: unavailable ? null : (_) => _onStartTap(minute),
               selectedColor: scheme.primary,
-              backgroundColor: booked
+              backgroundColor: unavailable
                   ? (isDark ? Colors.red.shade300.withAlpha(60) : Colors.red.shade100)
                   : (isDark
                       ? Colors.green.shade800.withAlpha(120)
@@ -313,7 +329,7 @@ class _SlotPickerWidgetState extends State<SlotPickerWidget> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
                 side: BorderSide(
-                  color: inFine && !booked && !isSelected
+                  color: inFine && !unavailable && !isSelected
                       ? scheme.primary.withAlpha(60)
                       : Colors.transparent,
                 ),

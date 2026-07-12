@@ -17,69 +17,40 @@ class ScanQrScreen extends ConsumerStatefulWidget {
 }
 
 class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
-  late final MobileScannerController _controller;
+  MobileScannerController? _controller;
   final _picker = ImagePicker();
-  int _scannerKey = 0;
   bool _scanning = true;
   bool _torch = false;
-  bool _cameraFailed = false;
   bool _analyzing = false;
+  bool _cameraFailed = false;
   Map<String, dynamic>? _bookingData;
   String? _errorMsg;
-  int _errorCount = 0;
-  Timer? _retryTimer;
 
   @override
   void initState() {
     super.initState();
     _controller = MobileScannerController(
-      autoStart: false,
-      cameraResolution: const Size(640, 480),
+      torchEnabled: false,
+      detectionSpeed: DetectionSpeed.noDuplicates,
     );
-    WidgetsBinding.instance.addPostFrameCallback((Duration _) => _startCamera());
   }
 
   @override
   void dispose() {
-    _retryTimer?.cancel();
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
-  }
-
-  Future<void> _startCamera() async {
-    if (!mounted) return;
-    try {
-      await _controller.start();
-      if (mounted) {
-        _errorCount = 0;
-        setState(() => _cameraFailed = false);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      debugPrint('QR Scanner start error: $e');
-      final ec = _errorCount;
-      if (ec < 3) {
-        _errorCount = ec + 1;
-        _retryTimer?.cancel();
-        _retryTimer = Timer(Duration(seconds: ec == 0 ? 1 : 2), () {
-          if (mounted) _startCamera();
-        });
-      } else {
-        setState(() {
-          _cameraFailed = true;
-          _scanning = false;
-        });
-      }
-    }
   }
 
   void _onDetect(BarcodeCapture capture) {
     if (!_scanning) return;
-    final barcode = capture.barcodes.firstOrNull;
-    final raw = barcode?.rawValue;
-    if (raw == null || raw.isEmpty) return;
-    _scanning = false;
-    _lookup(raw);
+    final barcodes = capture.barcodes;
+    for (final b in barcodes) {
+      final raw = b.rawValue;
+      if (raw == null || raw.isEmpty) continue;
+      _scanning = false;
+      _lookup(raw);
+      return;
+    }
   }
 
   Future<void> _pickAndAnalyze() async {
@@ -97,7 +68,8 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
       );
       if (xfile == null || !mounted) return;
 
-      final result = await _controller.analyzeImage(xfile.path);
+      if (_controller == null) return;
+      final result = await _controller!.analyzeImage(xfile.path);
       if (!mounted) return;
 
       if (result != null && result.barcodes.isNotEmpty) {
@@ -133,32 +105,12 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
   }
 
   void _reset() {
-    _retryTimer?.cancel();
     setState(() {
-      _scannerKey++;
       _bookingData = null;
       _errorMsg = null;
       _scanning = true;
       _torch = false;
       _cameraFailed = false;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((Duration _) {
-      _errorCount = 0;
-      _startCamera();
-    });
-  }
-
-  void _retry() {
-    _retryTimer?.cancel();
-    setState(() {
-      _scannerKey++;
-      _errorMsg = null;
-      _scanning = true;
-      _cameraFailed = false;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((Duration _) {
-      _errorCount = 0;
-      _startCamera();
     });
   }
 
@@ -167,7 +119,11 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
         title: const Text('مسح QR'),
         actions: [
           if (_bookingData != null)
@@ -180,7 +136,9 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
       ),
       body: _bookingData != null
           ? _buildResult(scheme)
-          : _cameraFailed ? _buildFallback(scheme) : _buildCamera(scheme),
+          : _cameraFailed
+              ? _buildFallback(scheme)
+              : _buildCamera(scheme),
     );
   }
 
@@ -188,31 +146,24 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
     return Stack(
       children: [
         MobileScanner(
-          key: ValueKey(_scannerKey),
           controller: _controller,
           onDetect: _onDetect,
           errorBuilder: (context, error) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.error_outline, size: 48, color: scheme.error),
-                  const SizedBox(height: 12),
-                  Text(error.errorCode.message,
-                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
-                  const SizedBox(height: 4),
-                  if (error.errorDetails?.message != null)
-                    Text('${error.errorDetails!.message}',
-                      style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 11)),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: _retry,
-                    child: const Text('إعادة المحاولة'),
-                  ),
-                ],
-              ),
-            );
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _cameraFailed = true);
+            });
+            return const SizedBox.shrink();
           },
+        ),
+        Center(
+          child: Container(
+            width: 250,
+            height: 250,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.white, width: 2),
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
         ),
         if (_scanning)
           Positioned(
@@ -227,7 +178,7 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
                   size: 32,
                 ),
                 onPressed: () {
-                  _controller.toggleTorch();
+                  _controller?.toggleTorch();
                   setState(() => _torch = !_torch);
                 },
               ),
@@ -254,6 +205,19 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
               ),
             ),
           ),
+        Positioned(
+          bottom: 80,
+          left: 0,
+          right: 0,
+          child: Text(
+            'وجه الكاميرا نحو رمز QR',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -265,13 +229,13 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.qr_code_scanner, size: 96, color: scheme.primary),
+            Icon(Icons.qr_code_scanner, size: 96, color: Colors.white),
             const SizedBox(height: 24),
             Text('صور رمز QR من الشاشة',
-              style: Theme.of(context).textTheme.titleMedium),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white)),
             const SizedBox(height: 8),
             Text('التقط صورة لرمز QR الموجود على شاشة المستخدم',
-              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+              style: TextStyle(color: Colors.white70, fontSize: 13),
               textAlign: TextAlign.center),
             const SizedBox(height: 32),
             SizedBox(
@@ -312,12 +276,6 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
                 ),
               ),
             ],
-            const SizedBox(height: 24),
-            TextButton.icon(
-              onPressed: _retry,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('إعادة محاولة الكاميرا المباشرة'),
-            ),
           ],
         ),
       ),

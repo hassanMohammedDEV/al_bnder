@@ -1,4 +1,4 @@
-import 'package:app_platform_ui/ui.dart';
+import 'package:app_platform_core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -33,7 +33,6 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
     final groupsState = ref.watch(facilityGroupsProvider);
     final allGroups = groupsState.data ?? [];
     final activeGroups = allGroups.where((g) => g.isActive).toList();
-    final bookingsState = ref.watch(myBookingsProvider);
 
     // Sync group changes
     if (selectedGroup != null) {
@@ -104,71 +103,155 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        Expanded(
-            child: RefreshIndicator(
-            onRefresh: () async => ref.read(myBookingsProvider.notifier).load(status: _statusFilter),
-            child: AsyncView<List<Booking>>(
-              status: bookingsState.status,
-              data: bookingsState.data,
-              error: bookingsState.error,
-              onLoading: () => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  SizedBox(height: MediaQuery.of(context).size.height * 0.6),
-                  const Center(child: CircularProgressIndicator()),
-                ],
-              ),
-              onEmpty: () => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  const SizedBox(height: 100),
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.event_busy, size: 64, color: scheme.onSurfaceVariant),
-                        const SizedBox(height: 16),
-                        Text('لا توجد حجوزات', style: TextStyle(color: scheme.onSurfaceVariant)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              onError: (e) => ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  const SizedBox(height: 100),
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.cloud_off, size: 48, color: scheme.error),
-                        const SizedBox(height: 16),
-                        Text(translateError(e), style: TextStyle(color: scheme.error)),
-                        ElevatedButton.icon(
-                          onPressed: () => ref.read(myBookingsProvider.notifier).load(),
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('إعادة المحاولة'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              onSuccess: (bookings) => ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                itemCount: bookings.length,
-                itemBuilder: (_, i) => _BookingCard(booking: bookings[i]),
-              ),
-            ),
-          ),
-        ),
+        Expanded(child: _buildBody(scheme)),
       ],
     );
 
     if (widget.inShell) return content;
     return Scaffold(appBar: AppBar(title: const Text('حجوزاتي')), body: content);
+  }
+
+  Widget _buildBody(ColorScheme scheme) {
+    final state = ref.watch(myBookingsProvider);
+    final notifier = ref.read(myBookingsProvider.notifier);
+
+    switch (state.status) {
+      case LoadStatus.loading:
+        return ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.6),
+          const Center(child: CircularProgressIndicator()),
+        ]);
+      case LoadStatus.error:
+        return ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+          const SizedBox(height: 100),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.cloud_off, size: 48, color: scheme.error),
+                const SizedBox(height: 16),
+                Text(translateError(state.error!), style: TextStyle(color: scheme.error)),
+                ElevatedButton.icon(
+                  onPressed: () => notifier.load(),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('إعادة المحاولة'),
+                ),
+              ],
+            ),
+          ),
+        ]);
+      case LoadStatus.success:
+        final paginated = state.data;
+        final bookings = paginated?.items ?? [];
+        if (bookings.isEmpty) {
+          return ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+            const SizedBox(height: 100),
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.event_busy, size: 64, color: scheme.onSurfaceVariant),
+                  const SizedBox(height: 16),
+                  Text('لا توجد حجوزات', style: TextStyle(color: scheme.onSurfaceVariant)),
+                ],
+              ),
+            ),
+          ]);
+        }
+        return _BookingPaginatedList(
+          paginated: paginated!,
+          onRefresh: () => notifier.load(),
+          onLoadMore: () => notifier.loadMore(),
+          scheme: scheme,
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+class _BookingPaginatedList extends StatefulWidget {
+  final Paginated<Booking> paginated;
+  final Future<void> Function() onRefresh;
+  final VoidCallback onLoadMore;
+  final ColorScheme scheme;
+
+  const _BookingPaginatedList({
+    required this.paginated,
+    required this.onRefresh,
+    required this.onLoadMore,
+    required this.scheme,
+  });
+
+  @override
+  State<_BookingPaginatedList> createState() => _BookingPaginatedListState();
+}
+
+class _BookingPaginatedListState extends State<_BookingPaginatedList> {
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      widget.onLoadMore();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bookings = widget.paginated.items;
+    final isLoadingMore = widget.paginated.isLoadingMore;
+    final hasMore = widget.paginated.hasNext;
+    final itemCount = bookings.length + (hasMore || isLoadingMore ? 1 : 0);
+
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh,
+      child: ListView.builder(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: itemCount,
+        itemBuilder: (_, i) {
+          if (i == bookings.length) {
+            if (widget.paginated.paginationError != null) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Text('فشل التحميل', style: TextStyle(color: widget.scheme.error, fontSize: 13)),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: widget.onLoadMore,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: const Text('إعادة المحاولة'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            );
+          }
+          return _BookingCard(booking: bookings[i]);
+        },
+      ),
+    );
   }
 }
 

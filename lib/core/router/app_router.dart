@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -33,7 +34,9 @@ import '../../features/ads/models/facility_ad.dart';
 import '../../features/announcements/presentaion/screens/announcements_screen.dart';
 import '../../features/announcements/presentaion/screens/create_announcement_screen.dart';
 import '../../features/availability/presentaion/screens/available_slots_screen.dart';
-import '../../features/settings/presentaion/screens/settings_screen.dart';
+import '../../features/admin/presentaion/screens/admin_settings_screen.dart';
+import '../../features/shared/presentaion/screens/simple_settings_screen.dart';
+import '../../features/user/presentaion/screens/user_settings_screen.dart';
 import '../../features/settings/presentaion/screens/privacy_policy_screen.dart';
 import '../../features/settings/presentaion/screens/terms_screen.dart';
 import '../../features/player_ads/presentaion/screens/player_ads_screen.dart';
@@ -49,7 +52,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final auth = ref.read(authStateProvider);
       final isLoggedIn = auth.isLoggedIn;
       final location = state.matchedLocation;
-      final isAuthRoute = location == '/login' || location == '/register' || location == '/verify-otp' || location == '/forgot-password' || location == '/forgot-password-otp';
+      final isAuthRoute = location == '/login' || location == '/register' || location == '/verify-otp' || location == '/forgot-password' || location == '/forgot-password-otp' || location == '/privacy' || location == '/terms';
 
       if (isLoggedIn) {
         if (auth.needsPhoneVerification && location != '/verify-otp') return '/verify-otp';
@@ -175,7 +178,22 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      GoRoute(path: '/settings', pageBuilder: (_, __) => const CupertinoPage(child: SettingsScreen())),
+      GoRoute(path: '/settings', pageBuilder: (_, __) {
+        final auth = ref.read(authStateProvider);
+        final role = auth.role;
+        Widget body;
+        if (role == 'facility_admin' || role == 'super_admin') {
+          body = const AdminSettingsScreen();
+        } else if (role == 'facility_viewer') {
+          body = const SimpleSettingsScreen();
+        } else {
+          body = const UserSettingsScreen();
+        }
+        return CupertinoPage(child: Scaffold(
+          appBar: AppBar(title: const Text('الإعدادات')),
+          body: body,
+        ));
+      }),
       GoRoute(path: '/announcements', pageBuilder: (_, __) => const CupertinoPage(child: AnnouncementsScreen())),
       GoRoute(path: '/available-slots', pageBuilder: (_, __) => const CupertinoPage(child: AvailableSlotsScreen())),
       GoRoute(path: '/admin/create-announcement', pageBuilder: (_, __) => const CupertinoPage(child: CreateAnnouncementScreen())),
