@@ -40,22 +40,30 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
               children: [
                 const Text('هل تم استلام الدفع؟', style: TextStyle(fontSize: 15)),
                 const SizedBox(height: 12),
-                InkWell(
-                  onTap: () => setDialogState(() { option = 'none'; depositCtl.clear(); }),
-                  child: Row(
-                    children: [
-                      Radio<String?>(value: 'none', groupValue: option, onChanged: (v) => setDialogState(() { option = v; depositCtl.clear(); })),
-                      const Text('لم يتم الدفع', style: TextStyle(fontSize: 14)),
-                    ],
+                RadioGroup<String?>(
+                  groupValue: option,
+                  onChanged: (v) => setDialogState(() { option = v; depositCtl.clear(); }),
+                  child: InkWell(
+                    onTap: () => setDialogState(() { option = 'none'; depositCtl.clear(); }),
+                    child: Row(
+                      children: [
+                        Radio<String?>(value: 'none'),
+                        const Text('لم يتم الدفع', style: TextStyle(fontSize: 14)),
+                      ],
+                    ),
                   ),
                 ),
-                InkWell(
-                  onTap: () => setDialogState(() => option = 'deposit'),
-                  child: Row(
-                    children: [
-                      Radio<String?>(value: 'deposit', groupValue: option, onChanged: (v) => setDialogState(() => option = v)),
-                      const Text('عربون', style: TextStyle(fontSize: 14)),
-                    ],
+                RadioGroup<String?>(
+                  groupValue: option,
+                  onChanged: (v) => setDialogState(() => option = v),
+                  child: InkWell(
+                    onTap: () => setDialogState(() => option = 'deposit'),
+                    child: Row(
+                      children: [
+                        Radio<String?>(value: 'deposit'),
+                        const Text('عربون', style: TextStyle(fontSize: 14)),
+                      ],
+                    ),
                   ),
                 ),
                 if (option == 'deposit')
@@ -72,13 +80,17 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
                       ),
                     ),
                   ),
-                InkWell(
-                  onTap: () => setDialogState(() { option = 'full'; depositCtl.clear(); }),
-                  child: Row(
-                    children: [
-                      Radio<String?>(value: 'full', groupValue: option, onChanged: (v) => setDialogState(() { option = v; depositCtl.clear(); })),
-                      Text('المبلغ كامل (${totalPrice.toStringAsFixed(0)} ر.ي)', style: const TextStyle(fontSize: 14)),
-                    ],
+                RadioGroup<String?>(
+                  groupValue: option,
+                  onChanged: (v) => setDialogState(() { option = v; depositCtl.clear(); }),
+                  child: InkWell(
+                    onTap: () => setDialogState(() { option = 'full'; depositCtl.clear(); }),
+                    child: Row(
+                      children: [
+                        Radio<String?>(value: 'full'),
+                        Text('المبلغ كامل (${totalPrice.toStringAsFixed(0)} ر.ي)', style: const TextStyle(fontSize: 14)),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -87,9 +99,11 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
               FilledButton(
                 onPressed: () {
-                  if (option == 'none') Navigator.pop(ctx, 0);
-                  else if (option == 'full') Navigator.pop(ctx, totalPrice);
-                  else if (option == 'deposit') {
+                  if (option == 'none') {
+                    Navigator.pop(ctx, 0);
+                  } else if (option == 'full') {
+                    Navigator.pop(ctx, totalPrice);
+                  } else if (option == 'deposit') {
                     final v = double.tryParse(depositCtl.text);
                     if (v != null && v > 0) Navigator.pop(ctx, v);
                   }
@@ -214,16 +228,19 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
           builder: (_, constraints) => ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
-              SizedBox(child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
-                    const SizedBox(height: 16),
-                    Text('لا توجد حجوزات معلقة', style: TextStyle(color: scheme.onSurfaceVariant)),
-                  ],
+              SizedBox(
+                height: constraints.maxHeight,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle_outline, size: 64, color: Colors.green),
+                      const SizedBox(height: 16),
+                      Text('لا توجد حجوزات معلقة', style: TextStyle(color: scheme.onSurfaceVariant)),
+                    ],
+                  ),
                 ),
-              ), height: constraints.maxHeight),
+              ),
             ],
           ),
         ),

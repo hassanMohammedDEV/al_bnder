@@ -268,13 +268,13 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
       startAt.minute,
     );
 
-    if (!mounted) return;
+    if (!context.mounted) return;
     if (!newEndAt.isAfter(startAt)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('وقت النهاية يجب أن يكون بعد وقت البداية')));
       return;
     }
 
-    if (!mounted) return;
+    if (!context.mounted) return;
     final fmt = NumberFormat('#,###');
     final oldPrice = (inst['price'] as num?)?.toDouble() ?? 0;
     final oldMins = oldEndAt.difference(startAt).inMinutes;

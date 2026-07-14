@@ -193,15 +193,15 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
       targetUserId = _selectedUser!['id'] as String;
     }
 
-    DateTime _dt(int min, DateTime date) {
+    DateTime dt(int min, DateTime date) {
       var d = DateTime(date.year, date.month, date.day, min ~/ 60, min % 60);
       if (_closeMinutes < _openMinutes && min < _openMinutes) {
         d = d.add(const Duration(days: 1));
       }
       return d;
     }
-    final startAt = _dt(_startMinute!, _selectedDate);
-    final endAt = _dt(_endMinute!, _selectedDate);
+    final startAt = dt(_startMinute!, _selectedDate);
+    final endAt = dt(_endMinute!, _selectedDate);
 
     Map<String, dynamic>? recurringRule;
     if (_isRecurring) {
@@ -295,7 +295,7 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
     final effectiveGroupId = _selectedGroupId ?? groupId;
     final facilitiesAsync = effectiveGroupId != null ? ref.watch(facilitiesProvider(effectiveGroupId)) : null;
     final groupsState = ref.watch(facilityGroupsProvider);
-    final _selectedFacilityPrice = () {
+    final facilityPrice = () {
       try {
         final facilities = facilitiesAsync?.value;
         if (facilities == null || _selectedFacilityId == null) return 0.0;
@@ -489,7 +489,7 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
                   },
                 );
               },
-              error: (e, __) => Text('خطأ: $e', style: TextStyle(color: scheme.error)),
+              error: (e, _) => Text('خطأ: $e', style: TextStyle(color: scheme.error)),
               loading: () => const LinearProgressIndicator(),
             ) ?? const Text('لا توجد مجموعة ملاعب', style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 24),
@@ -512,7 +512,7 @@ class _AdminCreateBookingScreenState extends ConsumerState<AdminCreateBookingScr
                 openMinutes: _openMinutes,
                 closeMinutes: _closeMinutes,
                 bookedSlots: _bookedSlots,
-                pricePerHour: _selectedFacilityPrice,
+                pricePerHour: facilityPrice,
                 maxBookingMinutes: _maxBookingMinutes,
                 fineFromMinutes: _fineFromMinutes,
                 fineToMinutes: _fineToMinutes,

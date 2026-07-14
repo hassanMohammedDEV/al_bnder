@@ -93,7 +93,7 @@ class _ManageAdsScreenState extends ConsumerState<ManageAdsScreen> {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: DropdownButtonFormField<String>(
-            value: actual,
+            initialValue: actual,
             decoration: const InputDecoration(
               labelText: 'المجموعة',
               border: OutlineInputBorder(),
@@ -109,7 +109,7 @@ class _ManageAdsScreenState extends ConsumerState<ManageAdsScreen> {
           ),
         );
       },
-      error: (_, __) => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
       loading: () => const SizedBox.shrink(),
     );
   }
@@ -292,7 +292,7 @@ class _AdCard extends ConsumerWidget {
                     height: 120,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
                     loadingBuilder: (_, child, progress) {
                       if (progress == null) return child;
                       return Container(

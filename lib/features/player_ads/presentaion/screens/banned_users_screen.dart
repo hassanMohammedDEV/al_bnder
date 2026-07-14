@@ -137,7 +137,7 @@ class _BannedUsersScreenState extends ConsumerState<BannedUsersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<String?>(selectedGroupProvider, (_, __) => _load());
+    ref.listen<String?>(selectedGroupProvider, (_, _) => _load());
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(

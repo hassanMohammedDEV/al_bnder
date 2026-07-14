@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -17,27 +16,19 @@ class ScanQrScreen extends ConsumerStatefulWidget {
 }
 
 class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
-  MobileScannerController? _controller;
-  final _picker = ImagePicker();
+  final _controller = MobileScannerController(
+    torchEnabled: false,
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
   bool _scanning = true;
   bool _torch = false;
-  bool _analyzing = false;
-  bool _cameraFailed = false;
   Map<String, dynamic>? _bookingData;
   String? _errorMsg;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = MobileScannerController(
-      torchEnabled: false,
-      detectionSpeed: DetectionSpeed.noDuplicates,
-    );
-  }
+  bool _cameraError = false;
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -53,41 +44,6 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
     }
   }
 
-  Future<void> _pickAndAnalyze() async {
-    if (_analyzing) return;
-    setState(() {
-      _analyzing = true;
-      _errorMsg = null;
-    });
-
-    try {
-      final xfile = await _picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1920,
-        maxHeight: 1920,
-      );
-      if (xfile == null || !mounted) return;
-
-      if (_controller == null) return;
-      final result = await _controller!.analyzeImage(xfile.path);
-      if (!mounted) return;
-
-      if (result != null && result.barcodes.isNotEmpty) {
-        final token = result.barcodes.first.rawValue;
-        if (token != null && token.isNotEmpty) {
-          _lookup(token);
-          return;
-        }
-      }
-      setState(() => _errorMsg = 'لم يتم العثور على QR');
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _errorMsg = 'فشل التحليل: $e');
-    } finally {
-      if (mounted) setState(() => _analyzing = false);
-    }
-  }
-
   Future<void> _lookup(String qrToken) async {
     final result = await ref.read(adminRepositoryProvider).getBookingByQrToken(qrToken);
     if (!mounted) return;
@@ -100,6 +56,7 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
       failure: (e) => setState(() {
         _errorMsg = translateError(e);
         _bookingData = null;
+        _scanning = true;
       }),
     );
   }
@@ -110,7 +67,7 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
       _errorMsg = null;
       _scanning = true;
       _torch = false;
-      _cameraFailed = false;
+      _cameraError = false;
     });
   }
 
@@ -136,9 +93,7 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
       ),
       body: _bookingData != null
           ? _buildResult(scheme)
-          : _cameraFailed
-              ? _buildFallback(scheme)
-              : _buildCamera(scheme),
+          : _buildCamera(scheme),
     );
   }
 
@@ -150,135 +105,99 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
           onDetect: _onDetect,
           errorBuilder: (context, error) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) setState(() => _cameraFailed = true);
+              if (mounted) setState(() => _cameraError = true);
             });
-            return const SizedBox.shrink();
+            return Container(
+              color: Colors.black,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.qr_code_scanner, size: 96, color: Colors.white38),
+                    const SizedBox(height: 24),
+                    const Text('تعذر الوصول إلى الكاميرا',
+                      style: TextStyle(color: Colors.white70, fontSize: 16)),
+                    const SizedBox(height: 32),
+                    FilledButton.icon(
+                      onPressed: () {
+                        setState(() => _cameraError = false);
+                        _controller.start();
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('إعادة المحاولة'),
+                    ),
+                  ],
+                ),
+              ),
+            );
           },
         ),
-        Center(
-          child: Container(
-            width: 250,
-            height: 250,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.white, width: 2),
-              borderRadius: BorderRadius.circular(16),
+        if (!_cameraError) ...[
+          Center(
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white, width: 2),
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
           ),
-        ),
-        if (_scanning)
+          if (_scanning)
+            Positioned(
+              bottom: 32,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: IconButton(
+                  icon: Icon(
+                    _torch ? Icons.flash_on : Icons.flash_off,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                  onPressed: () {
+                    _controller.toggleTorch();
+                    setState(() => _torch = !_torch);
+                  },
+                ),
+              ),
+            ),
+          if (_errorMsg != null)
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(12),
+                color: scheme.errorContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline, color: scheme.error, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(_errorMsg!, style: TextStyle(color: scheme.error))),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           Positioned(
-            bottom: 32,
+            bottom: 80,
             left: 0,
             right: 0,
-            child: Center(
-              child: IconButton(
-                icon: Icon(
-                  _torch ? Icons.flash_on : Icons.flash_off,
-                  color: Colors.white,
-                  size: 32,
-                ),
-                onPressed: () {
-                  _controller?.toggleTorch();
-                  setState(() => _torch = !_torch);
-                },
+            child: Text(
+              'وجه الكاميرا نحو رمز QR',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 14,
               ),
             ),
           ),
-        if (_errorMsg != null)
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: Material(
-              elevation: 4,
-              borderRadius: BorderRadius.circular(12),
-              color: scheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline, color: scheme.error, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(_errorMsg!, style: TextStyle(color: scheme.error))),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        Positioned(
-          bottom: 80,
-          left: 0,
-          right: 0,
-          child: Text(
-            'وجه الكاميرا نحو رمز QR',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontSize: 14,
-            ),
-          ),
-        ),
+        ],
       ],
-    );
-  }
-
-  Widget _buildFallback(ColorScheme scheme) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.qr_code_scanner, size: 96, color: Colors.white),
-            const SizedBox(height: 24),
-            Text('صور رمز QR من الشاشة',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white)),
-            const SizedBox(height: 8),
-            Text('التقط صورة لرمز QR الموجود على شاشة المستخدم',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
-              textAlign: TextAlign.center),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _analyzing ? null : _pickAndAnalyze,
-                icon: _analyzing
-                    ? const SizedBox(
-                        width: 20, height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.camera_alt, size: 28),
-                label: Text(
-                  _analyzing ? 'جاري التحليل...' : 'تصوير QR',
-                  style: const TextStyle(fontSize: 16),
-                ),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-            ),
-            if (_errorMsg != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: scheme.errorContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline, color: scheme.error, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(_errorMsg!,
-                      style: TextStyle(color: scheme.error))),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 

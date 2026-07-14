@@ -13,7 +13,7 @@ final bookingRepositoryProvider = Provider<BookingRepository>((ref) {
 class BookingRepositoryImpl implements BookingRepository {
   final ApiClient _apiClient;
 
-  BookingRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient;
+  BookingRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient; // ignore: prefer_initializing_formals
 
   @override
   Future<Result<Paginated<Booking>>> getMyBookings({String? status, String? facilityGroupId, Pagination? pagination}) {

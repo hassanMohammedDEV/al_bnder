@@ -10,15 +10,14 @@ import 'token_provider.dart';
 import '../../features/auth/providers/auth_provider.dart';
 
 class _SessionAwareClient extends http.BaseClient {
-  final http.Client _inner;
+  final http.Client inner;
   final void Function() onUnauthorized;
 
-  _SessionAwareClient({required http.Client inner, required this.onUnauthorized})
-    : _inner = inner;
+  _SessionAwareClient({required this.inner, required this.onUnauthorized});
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final response = await _inner.send(request);
+    final response = await inner.send(request);
     if (response.statusCode == 401) {
       onUnauthorized();
     }
@@ -26,7 +25,7 @@ class _SessionAwareClient extends http.BaseClient {
   }
 
   @override
-  void close() => _inner.close();
+  void close() => inner.close();
 }
 
 String _extractErrorMessage(String body) {

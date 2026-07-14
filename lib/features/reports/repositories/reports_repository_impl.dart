@@ -12,7 +12,7 @@ final reportsRepositoryProvider = Provider<ReportsRepository>((ref) {
 class ReportsRepositoryImpl implements ReportsRepository {
   final ApiClient _apiClient;
 
-  ReportsRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient;
+  ReportsRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient; // ignore: prefer_initializing_formals
 
   @override
   Future<Result<List<Map<String, dynamic>>>> searchBookingsByDateRange({
@@ -21,7 +21,7 @@ class ReportsRepositoryImpl implements ReportsRepository {
     required DateTime endDate,
   }) {
     return _apiClient.post('rpc/admin_search_bookings_by_date_range', body: {
-      if (facilityGroupId != null) 'p_facility_group_id': facilityGroupId,
+      'p_facility_group_id': ?facilityGroupId,
       'p_start_date': startDate.toIso8601String().substring(0, 10),
       'p_end_date': endDate.toIso8601String().substring(0, 10),
     }, parser: (json) {

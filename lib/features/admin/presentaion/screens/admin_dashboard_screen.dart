@@ -46,7 +46,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                   : null,
             );
           },
-          error: (e, __) => Center(
+          error: (e, _) => Center(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: Column(

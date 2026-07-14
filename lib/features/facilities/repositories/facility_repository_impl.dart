@@ -14,7 +14,7 @@ final facilityRepositoryProvider = Provider<FacilityRepository>((ref) {
 class FacilityRepositoryImpl implements FacilityRepository {
   final ApiClient _apiClient;
 
-  FacilityRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient;
+  FacilityRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient; // ignore: prefer_initializing_formals
 
   @override
   Future<Result<List<FacilityGroup>>> getGroups() {

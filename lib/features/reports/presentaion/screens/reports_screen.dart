@@ -877,8 +877,11 @@ class _WalletOperationsSection extends StatelessWidget {
 
     for (final op in operations) {
       final amount = (op['amount'] as num?)?.toDouble() ?? 0;
-      if (op['type'] == 'deposit') totalDeposits += amount;
-      else totalDeducts += amount;
+      if (op['type'] == 'deposit') {
+        totalDeposits += amount;
+      } else {
+        totalDeducts += amount;
+      }
     }
 
     return Column(

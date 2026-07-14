@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../auth/providers/auth_provider.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -108,11 +108,9 @@ class SimpleSettingsScreen extends ConsumerWidget {
                 subtitle: const Text('أرسل رابط التطبيق لأصدقائك'),
                 trailing: Icon(Icons.arrow_forward_ios, color: scheme.onSurfaceVariant),
                 onTap: () {
-                  Clipboard.setData(const ClipboardData(
-                    text: 'ملاعب البندر - تطبيق حجز الملاعب\nhttps://play.google.com/store/apps/details?id=com.al_bndr.app',
-                  ));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('تم نسخ الرابط')),
+                  Share.share(
+                    'ملاعب البندر - تطبيق حجز الملاعب\nhttps://play.google.com/store/apps/details?id=com.al_bndr.app',
+                    subject: 'ملاعب البندر',
                   );
                 },
               ),
@@ -120,7 +118,7 @@ class SimpleSettingsScreen extends ConsumerWidget {
               ListTile(
                 leading: Icon(Icons.info_outline, color: scheme.primary),
                 title: const Text('الإصدار'),
-                trailing: Text('1.0.38', style: TextStyle(color: scheme.onSurfaceVariant)),
+                trailing: Text('1.0.39', style: TextStyle(color: scheme.onSurfaceVariant)),
               ),
             ],
           ),

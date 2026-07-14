@@ -64,7 +64,7 @@ class _CreateEditAdScreenState extends ConsumerState<CreateEditAdScreen> {
       firstDate: now.subtract(const Duration(days: 30)),
       lastDate: now.add(const Duration(days: 365)),
     );
-    if (date == null || !context.mounted) return;
+    if (date == null || !mounted) return;
 
     final time = await showTimePicker(
       context: context,
@@ -197,7 +197,7 @@ class _CreateEditAdScreenState extends ConsumerState<CreateEditAdScreen> {
                     height: 150,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       height: 150,
                       color: scheme.errorContainer,
                       child: Center(

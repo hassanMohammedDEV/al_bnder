@@ -13,7 +13,7 @@ final walletRepositoryProvider = Provider<WalletRepository>((ref) {
 class WalletRepositoryImpl implements WalletRepository {
   final ApiClient _apiClient;
 
-  WalletRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient;
+  WalletRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient; // ignore: prefer_initializing_formals
 
   @override
   Future<Result<WalletPaginatedState>> getWallet(String facilityGroupId, {Pagination? pagination}) {

@@ -30,9 +30,9 @@ class AuthRepositoryImpl implements AuthRepository {
     required ApiClient apiClient,
     required ApiClient authApiClient,
     required Ref ref,
-  })  : _apiClient = apiClient,
-        _authApiClient = authApiClient,
-        _ref = ref;
+  })  : _apiClient = apiClient, // ignore: prefer_initializing_formals
+        _authApiClient = authApiClient, // ignore: prefer_initializing_formals
+        _ref = ref; // ignore: prefer_initializing_formals
 
   @override
   Future<Result<void>> generateOtp(String phone) async {

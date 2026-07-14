@@ -49,11 +49,11 @@ class AdsRepositoryImpl implements AdsRepository {
     return _apiClient.post('rpc/create_advertisement', body: {
       'p_facility_group_id': facilityGroupId,
       'p_title': title,
-      if (description != null) 'p_description': description,
-      if (imageUrl != null) 'p_image_url': imageUrl,
-      if (linkUrl != null) 'p_link_url': linkUrl,
-      if (startsAt != null) 'p_starts_at': startsAt,
-      if (endsAt != null) 'p_ends_at': endsAt,
+      'p_description': ?description,
+      'p_image_url': ?imageUrl,
+      'p_link_url': ?linkUrl,
+      'p_starts_at': ?startsAt,
+      'p_ends_at': ?endsAt,
       'p_sort_order': sortOrder,
     }, parser: (_) {});
   }
@@ -72,12 +72,12 @@ class AdsRepositoryImpl implements AdsRepository {
     return _apiClient.post('rpc/update_advertisement', body: {
       'p_ad_id': adId,
       'p_title': title,
-      if (description != null) 'p_description': description,
-      if (imageUrl != null) 'p_image_url': imageUrl,
-      if (linkUrl != null) 'p_link_url': linkUrl,
-      if (startsAt != null) 'p_starts_at': startsAt,
-      if (endsAt != null) 'p_ends_at': endsAt,
-      if (sortOrder != null) 'p_sort_order': sortOrder,
+      'p_description': ?description,
+      'p_image_url': ?imageUrl,
+      'p_link_url': ?linkUrl,
+      'p_starts_at': ?startsAt,
+      'p_ends_at': ?endsAt,
+      'p_sort_order': ?sortOrder,
     }, parser: (_) {});
   }
 

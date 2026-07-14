@@ -52,7 +52,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: activeGroups.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (_, i) => FilterChip(
                   label: Text(activeGroups[i].name, style: const TextStyle(fontSize: 13)),
                   selected: activeGroups[i].id == selectedGroup,

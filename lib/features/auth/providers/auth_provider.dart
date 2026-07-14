@@ -161,7 +161,7 @@ final authServiceProvider = Provider<AuthService>((ref) {
 
 class AuthService {
   final AuthRepository _repo;
-  AuthService({required AuthRepository repo}) : _repo = repo;
+  AuthService({required AuthRepository repo}) : _repo = repo; // ignore: prefer_initializing_formals
 
   Future<Result<void>> generateOtp(String phone) => _repo.generateOtp(phone);
   Future<Result<void>> verifyOtp(String phone, String code) => _repo.verifyOtp(phone, code);

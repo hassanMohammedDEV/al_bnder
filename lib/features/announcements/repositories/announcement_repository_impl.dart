@@ -13,7 +13,7 @@ final announcementRepositoryProvider = Provider<AnnouncementRepository>((ref) {
 class AnnouncementRepositoryImpl implements AnnouncementRepository {
   final ApiClient _apiClient;
 
-  AnnouncementRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient;
+  AnnouncementRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient; // ignore: prefer_initializing_formals
 
   @override
   Future<Result<List<Announcement>>> getMyAnnouncements() {

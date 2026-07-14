@@ -1,7 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../auth/providers/auth_provider.dart';
-import '../repositories/reports_repository.dart';
 import '../repositories/reports_repository_impl.dart';
 
 final reportsProvider = FutureProvider.family<List<Map<String, dynamic>>, ReportsQuery>(

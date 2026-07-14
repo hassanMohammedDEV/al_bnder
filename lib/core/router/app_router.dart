@@ -63,15 +63,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/login', pageBuilder: (_, __) => const CupertinoPage(child: LoginScreen())),
-      GoRoute(path: '/register', pageBuilder: (_, __) => const CupertinoPage(child: RegisterScreen())),
+      GoRoute(path: '/login', pageBuilder: (_, _) => const CupertinoPage(child: LoginScreen())),
+      GoRoute(path: '/register', pageBuilder: (_, _) => const CupertinoPage(child: RegisterScreen())),
       GoRoute(
         path: '/verify-otp',
-        pageBuilder: (_, __) => const CupertinoPage(child: OtpScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: OtpScreen()),
       ),
-      GoRoute(path: '/forgot-password', pageBuilder: (_, __) => const CupertinoPage(child: ForgotPasswordScreen())),
-      GoRoute(path: '/forgot-password-otp', pageBuilder: (_, __) => const CupertinoPage(child: ForgotPasswordOtpScreen())),
-      GoRoute(path: '/home', pageBuilder: (_, __) => const CupertinoPage(child: HomeScreen())),
+      GoRoute(path: '/forgot-password', pageBuilder: (_, _) => const CupertinoPage(child: ForgotPasswordScreen())),
+      GoRoute(path: '/forgot-password-otp', pageBuilder: (_, _) => const CupertinoPage(child: ForgotPasswordOtpScreen())),
+      GoRoute(path: '/home', pageBuilder: (_, _) => const CupertinoPage(child: HomeScreen())),
       GoRoute(
         path: '/facilities/:groupId',
         pageBuilder: (_, state) => CupertinoPage(
@@ -88,7 +88,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
-      GoRoute(path: '/my-bookings', pageBuilder: (_, __) => const CupertinoPage(child: MyBookingsScreen())),
+      GoRoute(path: '/my-bookings', pageBuilder: (_, _) => const CupertinoPage(child: MyBookingsScreen())),
       GoRoute(
         path: '/booking/:id',
         pageBuilder: (_, state) => CupertinoPage(
@@ -97,22 +97,22 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
-      GoRoute(path: '/wallet', pageBuilder: (_, __) => const CupertinoPage(child: WalletScreen())),
+      GoRoute(path: '/wallet', pageBuilder: (_, _) => const CupertinoPage(child: WalletScreen())),
       GoRoute(
         path: '/admin/dashboard',
-        pageBuilder: (_, __) => const CupertinoPage(child: AdminDashboardScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: AdminDashboardScreen()),
       ),
       GoRoute(
         path: '/admin/pending',
-        pageBuilder: (_, __) => const CupertinoPage(child: PendingBookingsScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: PendingBookingsScreen()),
       ),
       GoRoute(
         path: '/admin/facilities',
-        pageBuilder: (_, __) => const CupertinoPage(child: ManageFacilitiesScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: ManageFacilitiesScreen()),
       ),
       GoRoute(
         path: '/admin/ads',
-        pageBuilder: (_, __) => const CupertinoPage(child: ManageAdsScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: ManageAdsScreen()),
       ),
       GoRoute(
         path: '/admin/ads/create',
@@ -135,27 +135,27 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/admin/deposit',
-        pageBuilder: (_, __) => const CupertinoPage(child: DepositScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: DepositScreen()),
       ),
       GoRoute(
         path: '/admin/create-booking',
-        pageBuilder: (_, __) => const CupertinoPage(child: AdminCreateBookingScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: AdminCreateBookingScreen()),
       ),
       GoRoute(
         path: '/admin/scan-qr',
-        pageBuilder: (_, __) => const CupertinoPage(child: ScanQrScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: ScanQrScreen()),
       ),
       GoRoute(
         path: '/admin/search-bookings',
-        pageBuilder: (_, __) => const CupertinoPage(child: AdminSearchBookingsScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: AdminSearchBookingsScreen()),
       ),
       GoRoute(
         path: '/admin/reports',
-        pageBuilder: (_, __) => const CupertinoPage(child: ReportsScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: ReportsScreen()),
       ),
       GoRoute(
         path: '/admin/settings',
-        pageBuilder: (_, __) => const CupertinoPage(child: GroupSettingsScreen()),
+        pageBuilder: (_, _) => const CupertinoPage(child: GroupSettingsScreen()),
       ),
       GoRoute(
         path: '/admin/today-bookings',
@@ -178,7 +178,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      GoRoute(path: '/settings', pageBuilder: (_, __) {
+      GoRoute(path: '/settings', pageBuilder: (_, _) {
         final auth = ref.read(authStateProvider);
         final role = auth.role;
         Widget body;
@@ -194,21 +194,21 @@ final routerProvider = Provider<GoRouter>((ref) {
           body: body,
         ));
       }),
-      GoRoute(path: '/announcements', pageBuilder: (_, __) => const CupertinoPage(child: AnnouncementsScreen())),
-      GoRoute(path: '/available-slots', pageBuilder: (_, __) => const CupertinoPage(child: AvailableSlotsScreen())),
-      GoRoute(path: '/admin/create-announcement', pageBuilder: (_, __) => const CupertinoPage(child: CreateAnnouncementScreen())),
-      GoRoute(path: '/player-ads', pageBuilder: (_, __) => const CupertinoPage(child: PlayerAdsScreen())),
-      GoRoute(path: '/create-player-ad', pageBuilder: (_, __) => const CupertinoPage(child: CreatePlayerAdScreen())),
-      GoRoute(path: '/admin/reported-ads', pageBuilder: (_, __) => const CupertinoPage(child: ReportedAdsScreen())),
-      GoRoute(path: '/admin/create-official-ad', pageBuilder: (_, __) => const CupertinoPage(child: CreateOfficialPlayerAdScreen())),
-      GoRoute(path: '/admin/banned-users', pageBuilder: (_, __) => const CupertinoPage(child: BannedUsersScreen())),
-      GoRoute(path: '/privacy', pageBuilder: (_, __) => const CupertinoPage(child: PrivacyPolicyScreen())),
-      GoRoute(path: '/terms', pageBuilder: (_, __) => const CupertinoPage(child: TermsScreen())),
-      GoRoute(path: '/edit-profile', pageBuilder: (_, __) => const CupertinoPage(child: EditProfileScreen())),
+      GoRoute(path: '/announcements', pageBuilder: (_, _) => const CupertinoPage(child: AnnouncementsScreen())),
+      GoRoute(path: '/available-slots', pageBuilder: (_, _) => const CupertinoPage(child: AvailableSlotsScreen())),
+      GoRoute(path: '/admin/create-announcement', pageBuilder: (_, _) => const CupertinoPage(child: CreateAnnouncementScreen())),
+      GoRoute(path: '/player-ads', pageBuilder: (_, _) => const CupertinoPage(child: PlayerAdsScreen())),
+      GoRoute(path: '/create-player-ad', pageBuilder: (_, _) => const CupertinoPage(child: CreatePlayerAdScreen())),
+      GoRoute(path: '/admin/reported-ads', pageBuilder: (_, _) => const CupertinoPage(child: ReportedAdsScreen())),
+      GoRoute(path: '/admin/create-official-ad', pageBuilder: (_, _) => const CupertinoPage(child: CreateOfficialPlayerAdScreen())),
+      GoRoute(path: '/admin/banned-users', pageBuilder: (_, _) => const CupertinoPage(child: BannedUsersScreen())),
+      GoRoute(path: '/privacy', pageBuilder: (_, _) => const CupertinoPage(child: PrivacyPolicyScreen())),
+      GoRoute(path: '/terms', pageBuilder: (_, _) => const CupertinoPage(child: TermsScreen())),
+      GoRoute(path: '/edit-profile', pageBuilder: (_, _) => const CupertinoPage(child: EditProfileScreen())),
     ],
   );
 
-  ref.listen(authStateProvider, (_, __) => router.refresh());
+  ref.listen(authStateProvider, (_, _) => router.refresh());
 
   return router;
 });

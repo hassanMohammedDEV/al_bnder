@@ -54,5 +54,5 @@ class AuthState {
     );
   }
 
-  String get email => '${phone}@al-bndr.app';
+  String get email => '$phone@al-bndr.app';
 }

@@ -60,8 +60,8 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: 4,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (_, __) => const ShimmerWidget(
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (_, _) => const ShimmerWidget(
                     width: 100, height: 44, borderRadius: 22,
                   ),
                 ),
@@ -71,7 +71,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: groups.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
                   itemBuilder: (_, i) => _GroupChip(
                     group: groups[i],
                     isSelected: groups[i].id == selectedId,
@@ -293,7 +293,7 @@ class _WalletCard extends ConsumerWidget {
                     loading: () => const ShimmerWidget(
                       width: 100, height: 28, borderRadius: 4,
                     ),
-                    error: (_, __) => const Text(
+                    error: (_, _) => const Text(
                       '---',
                       style: TextStyle(
                         color: Colors.white,

@@ -20,15 +20,15 @@ class AdminRepositoryImpl implements AdminRepository {
   AdminRepositoryImpl({
     required ApiClient apiClient,
     required ApiClient authApiClient,
-  })  : _apiClient = apiClient,
-        _authApiClient = authApiClient;
+  })  : _apiClient = apiClient, // ignore: prefer_initializing_formals
+        _authApiClient = authApiClient; // ignore: prefer_initializing_formals
 
   @override
   Future<Result<Map<String, dynamic>>> getDashboard({String? facilityGroupId, DateTime? startDate, DateTime? endDate}) {
     return _apiClient.post('rpc/get_admin_dashboard', body: {
       'p_facility_group_id': facilityGroupId,
-      if (startDate != null) 'p_from_date': startDate.toIso8601String().substring(0, 10),
-      if (endDate != null) 'p_to_date': endDate.toIso8601String().substring(0, 10),
+      'p_from_date': ?startDate?.toIso8601String()?.substring(0, 10), // ignore: invalid_null_aware_operator
+      'p_to_date': ?endDate?.toIso8601String()?.substring(0, 10), // ignore: invalid_null_aware_operator
     }, parser: (json) => json as Map<String, dynamic>);
   }
 
@@ -85,7 +85,7 @@ class AdminRepositoryImpl implements AdminRepository {
   Future<Result<List<Map<String, dynamic>>>> searchUsers(String query, {String? facilityGroupId}) {
     return _apiClient.post('rpc/search_users_by_phone', body: {
       'p_phone_query': query,
-      if (facilityGroupId != null) 'p_facility_group_id': facilityGroupId,
+      'p_facility_group_id': ?facilityGroupId,
     }, parser: (json) {
       final data = (json as Map<String, dynamic>)['data'] as Map<String, dynamic>;
       final users = data['users'] as List;
@@ -107,14 +107,14 @@ class AdminRepositoryImpl implements AdminRepository {
     String paymentType = 'full',
   }) {
     return _apiClient.post('rpc/admin_create_booking', body: {
-      if (targetUserId != null) 'p_target_user_id': targetUserId,
+      'p_target_user_id': ?targetUserId,
       'p_facility_id': facilityId,
       'p_start_at': startAt.toUtc().toIso8601String(),
       'p_end_at': endAt.toUtc().toIso8601String(),
-      if (targetName != null) 'p_target_name': targetName,
-      if (targetPhone != null) 'p_target_phone': targetPhone,
+      'p_target_name': ?targetName,
+      'p_target_phone': ?targetPhone,
       'p_is_recurring': isRecurring,
-      if (recurringRule != null) 'p_recurring_rule': recurringRule,
+      'p_recurring_rule': ?recurringRule,
       'p_auto_confirm': autoConfirm,
       'p_payment_type': paymentType,
     }, parser: (json) => json as Map<String, dynamic>);
@@ -162,7 +162,7 @@ class AdminRepositoryImpl implements AdminRepository {
     return _apiClient.post('rpc/record_developer_settlement', body: {
       'p_facility_group_id': facilityGroupId,
         'p_amount': amount,
-      if (notes != null) 'p_notes': notes,
+      'p_notes': ?notes,
     }, parser: (_) {});
   }
 
@@ -311,7 +311,7 @@ class AdminRepositoryImpl implements AdminRepository {
     required DateTime endDate,
   }) {
     return _apiClient.post('rpc/admin_search_bookings_by_date_range', body: {
-      if (facilityGroupId != null) 'p_facility_group_id': facilityGroupId,
+      'p_facility_group_id': ?facilityGroupId,
       'p_start_date': startDate.toIso8601String().substring(0, 10),
       'p_end_date': endDate.toIso8601String().substring(0, 10),
     }, parser: (json) {
@@ -327,7 +327,7 @@ class AdminRepositoryImpl implements AdminRepository {
   }) {
     return _apiClient.post('rpc/admin_search_bookings_by_phone', body: {
       'p_phone_query': phoneQuery,
-      if (facilityGroupId != null) 'p_facility_group_id': facilityGroupId,
+      'p_facility_group_id': ?facilityGroupId,
     }, parser: (json) {
       final data = (json as Map<String, dynamic>)['data'] as List;
       return data.cast<Map<String, dynamic>>();
@@ -345,9 +345,9 @@ class AdminRepositoryImpl implements AdminRepository {
     return _apiClient.post('rpc/update_facility', body: {
       'p_facility_id': facilityId,
       'p_name': name,
-      if (description != null) 'p_description': description,
-      if (pricePerHour != null) 'p_price_per_hour': pricePerHour,
-      if (isActive != null) 'p_is_active': isActive,
+      'p_description': ?description,
+      'p_price_per_hour': ?pricePerHour,
+      'p_is_active': ?isActive,
     }, parser: (_) {});
   }
 }

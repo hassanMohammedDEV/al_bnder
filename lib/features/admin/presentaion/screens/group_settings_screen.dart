@@ -129,10 +129,12 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
         close24: 24,
       ),
     );
-    if (picked != null) setState(() {
-      _fineFromHour = picked;
-      _fineFromMinute = 0;
-    });
+    if (picked != null) {
+      setState(() {
+        _fineFromHour = picked;
+        _fineFromMinute = 0;
+      });
+    }
   }
 
   Future<void> _pickFineTo() async {
@@ -146,10 +148,12 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
         close24: 24,
       ),
     );
-    if (picked != null) setState(() {
-      _fineToHour = picked;
-      _fineToMinute = 0;
-    });
+    if (picked != null) {
+      setState(() {
+        _fineToHour = picked;
+        _fineToMinute = 0;
+      });
+    }
   }
 
   String _toTimeStr(int? hour) {
@@ -230,7 +234,7 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
         children: [
           if (isSuperAdmin) ...[
             DropdownButtonFormField<String>(
-              value: _selectedGroupId,
+              initialValue: _selectedGroupId,
               decoration: const InputDecoration(labelText: 'اختر المجموعة'),
               items: groups.map((g) => DropdownMenuItem(
                 value: g.id,

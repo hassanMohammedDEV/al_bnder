@@ -355,7 +355,7 @@ class _CreatePlayerAdScreenState extends ConsumerState<CreatePlayerAdScreen> {
                 );
               },
               loading: () => const SizedBox(height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
-              error: (_, __) => const SizedBox(height: 48, child: Center(child: Text('فشل تحميل الملاعب'))),
+              error: (_, _) => const SizedBox(height: 48, child: Center(child: Text('فشل تحميل الملاعب'))),
             ) ?? const SizedBox(height: 48, child: Center(child: Text('اختر مجموعة ملاعب أولاً'))),
             const SizedBox(height: 20),
 

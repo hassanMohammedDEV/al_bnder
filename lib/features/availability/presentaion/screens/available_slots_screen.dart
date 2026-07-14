@@ -83,7 +83,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
     if (picked != null) {
       final days = picked.end.difference(picked.start).inDays + 1;
       if (days > 3) {
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('يمكن اختيار 3 أيام كحد أقصى')),
           );
@@ -184,7 +184,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: groups.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final g = groups[i];
                 return FilterChip(

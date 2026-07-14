@@ -144,15 +144,15 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
 
     final crossesMidnight = _closeMinutes < _openMinutes;
 
-    DateTime _dt(int min, DateTime date) {
+    DateTime dt(int min, DateTime date) {
       var d = DateTime(date.year, date.month, date.day, min ~/ 60, min % 60);
       if (crossesMidnight && min < _openMinutes) d = d.add(const Duration(days: 1));
       return d;
     }
 
     final form = ref.read(bookingFormProvider);
-    final start = _dt(_startMinute!, form.selectedDate);
-    final end = _dt(_endMinute!, form.selectedDate);
+    final start = dt(_startMinute!, form.selectedDate);
+    final end = dt(_endMinute!, form.selectedDate);
 
     double balance = 0;
     double depositAmount = 5000;
@@ -172,6 +172,7 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
       );
     } catch (_) {}
 
+    if (!mounted) return;
     final totalMinutes = effMin;
     final totalPrice = (totalMinutes / 60) * form.pricePerHour;
 

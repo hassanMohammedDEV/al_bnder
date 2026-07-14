@@ -62,7 +62,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
 
     final nameResult = await action.updateName(_nameCtrl.text.trim());
-    if (!context.mounted) return;
+    if (!mounted) return;
     String? err;
     nameResult.when(success: (_) {}, failure: (e) => err = translateError(e));
     if (err != null) {
@@ -72,7 +72,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
     if (_savePassword) {
       final pwResult = await action.changePassword(_password);
-      if (!context.mounted) return;
+      if (!mounted) return;
       String? pwErr;
       pwResult.when(success: (_) {}, failure: (e) => pwErr = translateError(e));
       if (pwErr != null) {
@@ -81,7 +81,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
     }
 
-    if (context.mounted) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('تم حفظ التغييرات')),
       );

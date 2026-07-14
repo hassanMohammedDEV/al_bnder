@@ -13,7 +13,7 @@ final availabilityRepositoryProvider = Provider<AvailabilityRepository>((ref) {
 class AvailabilityRepositoryImpl implements AvailabilityRepository {
   final ApiClient _apiClient;
 
-  AvailabilityRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient;
+  AvailabilityRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient; // ignore: prefer_initializing_formals
 
   @override
   Future<Result<GroupAvailability>> getAvailableSlots({

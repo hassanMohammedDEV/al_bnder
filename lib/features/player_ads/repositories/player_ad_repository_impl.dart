@@ -13,7 +13,7 @@ final playerAdRepositoryProvider = Provider<PlayerAdRepository>((ref) {
 class PlayerAdRepositoryImpl implements PlayerAdRepository {
   final ApiClient _apiClient;
 
-  PlayerAdRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient;
+  PlayerAdRepositoryImpl({required ApiClient apiClient}) : _apiClient = apiClient; // ignore: prefer_initializing_formals
 
   @override
   Future<Result<List<PlayerAd>>> getPlayerAds(String facilityGroupId) {
