@@ -1,7 +1,7 @@
 name: al_bndr
 description: "Al Bndr - Booking Management System"
 publish_to: 'none'
-version: 1.0.0+39
+version: 1.0.0+41
 environment:
   sdk: ^3.12.1
 
@@ -62,3 +62,5 @@ flutter:
           weight: 500
         - asset: assets/fonts/Tajawal-Bold.ttf
           weight: 700
+  assets:
+    - shorebird.yaml

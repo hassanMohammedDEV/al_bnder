@@ -38,8 +38,9 @@ class _SuperAdminShellState extends ConsumerState<SuperAdminShell> {
         if (!didPop) _selectTab(0);
       },
       child: Scaffold(
+        extendBody: true,
         appBar: AppBar(
-          title: const Text('البندر'),
+          title: const Text('البندر | تجريبي'),
           actions: [
             Container(
               margin: const EdgeInsets.only(right: 8),
@@ -55,6 +56,8 @@ class _SuperAdminShellState extends ConsumerState<SuperAdminShell> {
           ],
         ),
         body: SafeArea(
+          top: true,
+          bottom: false,
           child: IndexedStack(
             index: _tabIndex,
             children: [

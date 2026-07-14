@@ -33,10 +33,13 @@ class _ViewerShellState extends ConsumerState<ViewerShell> {
         if (!didPop) _selectTab(0);
       },
       child: Scaffold(
+        extendBody: true,
         appBar: AppBar(
-          title: const Text('البندر'),
+          title: const Text('البندر | تجريبي'),
         ),
         body: SafeArea(
+          top: true,
+          bottom: false,
           child: IndexedStack(
             index: _tabIndex,
             children: [

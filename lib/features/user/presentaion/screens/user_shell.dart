@@ -37,8 +37,9 @@ class _UserShellState extends ConsumerState<UserShell> {
         if (!didPop) _selectTab(0);
       },
       child: Scaffold(
+        extendBody: true,
         appBar: AppBar(
-          title: const Text('البندر'),
+          title: const Text('البندر | تجريبي'),
           actions: [
             IconButton(
               icon: const Icon(Icons.schedule),
@@ -49,6 +50,8 @@ class _UserShellState extends ConsumerState<UserShell> {
           ],
         ),
         body: SafeArea(
+          top: true,
+          bottom: false,
           child: IndexedStack(
             index: _tabIndex,
             children: [

@@ -118,7 +118,7 @@ class SimpleSettingsScreen extends ConsumerWidget {
               ListTile(
                 leading: Icon(Icons.info_outline, color: scheme.primary),
                 title: const Text('الإصدار'),
-                trailing: Text('1.0.39', style: TextStyle(color: scheme.onSurfaceVariant)),
+                trailing: Text('1.0.40', style: TextStyle(color: scheme.onSurfaceVariant)),
               ),
             ],
           ),
