@@ -2,6 +2,7 @@ import 'package:app_platform_core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/helpers/error_helper.dart';
 import '../../../../presentaion/shared/time_picker_dialog.dart';
@@ -9,6 +10,7 @@ import '../../models/booking.dart';
 import '../../providers/booking_provider.dart';
 import '../../../facilities/providers/selected_group_provider.dart';
 import '../../../facilities/providers/facility_provider.dart';
+import '../../../facilities/models/facility_group.dart';
 
 class MyBookingsScreen extends ConsumerStatefulWidget {
   final bool inShell;
@@ -255,7 +257,7 @@ class _BookingPaginatedListState extends State<_BookingPaginatedList> {
   }
 }
 
-class _BookingCard extends StatelessWidget {
+class _BookingCard extends ConsumerWidget {
   final Booking booking;
   const _BookingCard({required this.booking});
 
@@ -281,22 +283,37 @@ class _BookingCard extends StatelessWidget {
     }
   }
 
-  String _formatCreatedAt(String iso) {
+  String _timeAgo(String iso) {
     try {
       final dt = DateTime.parse(iso).toLocal();
-      final h = dt.hour;
-      final m = dt.minute;
-      final hour12 = h == 0 ? 12 : (h <= 12 ? h : h - 12);
-      final period = h < 12 ? 'ص' : 'م';
-      final minute = m.toString().padLeft(2, '0');
-      return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')} $hour12:$minute $period';
+      final diff = DateTime.now().difference(dt);
+      final minutes = diff.inMinutes;
+      final hours = diff.inHours;
+      final days = diff.inDays;
+
+      if (minutes < 1) return 'الآن';
+      if (minutes == 1) return 'منذ دقيقة';
+      if (minutes == 2) return 'منذ دقيقتين';
+      if (minutes < 60) return 'منذ $minutes دقائق';
+      if (hours == 1) return 'منذ ساعة';
+      if (hours == 2) return 'منذ ساعتين';
+      if (hours < 24) return 'منذ $hours ساعات';
+      if (days == 1) return 'منذ يوم';
+      if (days == 2) return 'منذ يومين';
+      if (days < 30) return 'منذ $days أيام';
+      if (days < 60) return 'منذ شهر';
+      if (days < 365) return 'منذ ${(days / 30).floor()} أشهر';
+      final years = (days / 365).floor();
+      if (years == 1) return 'منذ سنة';
+      if (years == 2) return 'منذ سنتين';
+      return 'منذ $years سنوات';
     } catch (_) {
       return iso;
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final activeInstances = booking.instances
         ?.where((i) => i.status != 'cancelled' && i.status != 'completed')
@@ -417,38 +434,14 @@ class _BookingCard extends StatelessWidget {
                     Icon(Icons.schedule, size: 13, color: scheme.onSurfaceVariant),
                     const SizedBox(width: 4),
                     Text(
-                      'تم الإنشاء: ${_formatCreatedAt(booking.createdAt)}',
+                      _timeAgo(booking.createdAt),
                       style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
                     ),
                   ],
                 ),
               ),
               if (booking.status == 'pending')
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: Colors.orange.shade700),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'هذا الحجز معلق، يرجى التواصل مع الإدارة لتأكيد الحجز، وإلا لن يتم احتسابه',
-                            style: TextStyle(fontSize: 11, color: Colors.orange.shade800, height: 1.4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                _PendingBanner(groupId: booking.groupId),
               if (booking.isAdminBooking)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -496,6 +489,82 @@ class _BookingCard extends StatelessWidget {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingBanner extends ConsumerWidget {
+  final String groupId;
+  const _PendingBanner({required this.groupId});
+
+  String _whatsappUrl(String phone) {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('0')) {
+      return 'https://wa.me/966${digits.substring(1)}';
+    }
+    if (digits.startsWith('966')) {
+      return 'https://wa.me/$digits';
+    }
+    return 'https://wa.me/$digits';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final groupsState = ref.watch(facilityGroupsProvider);
+    final groups = groupsState.data ?? <FacilityGroup>[];
+    final group = groups.where((g) => g.id == groupId).firstOrNull;
+    final phone = group?.phone;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.orange.shade700),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'هذا الحجز معلق، يرجى التواصل مع الإدارة لتأكيد الحجز، وإلا لن يتم احتسابه',
+                    style: TextStyle(fontSize: 11, color: Colors.orange.shade800, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+            if (phone != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.chat, size: 16),
+                    label: const Text('تواصل عبر واتساب'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () async {
+                      final url = Uri.parse(_whatsappUrl(phone));
+                      await launchUrl(url, mode: LaunchMode.externalApplication);
+                    },
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

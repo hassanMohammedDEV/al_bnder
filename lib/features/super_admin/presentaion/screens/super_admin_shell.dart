@@ -56,8 +56,6 @@ class _SuperAdminShellState extends ConsumerState<SuperAdminShell> {
           ],
         ),
         body: SafeArea(
-          top: true,
-          bottom: false,
           child: IndexedStack(
             index: _tabIndex,
             children: [

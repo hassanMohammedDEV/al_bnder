@@ -12,6 +12,7 @@ class Announcement with AnnouncementMappable {
   final String createdAt;
   final bool isRead;
   final DateTime? readAt;
+  final int readCount;
 
   const Announcement({
     required this.id,
@@ -22,6 +23,7 @@ class Announcement with AnnouncementMappable {
     required this.createdAt,
     this.isRead = false,
     this.readAt,
+    this.readCount = 0,
   });
 
   static const fromMap = AnnouncementMapper.fromMap;

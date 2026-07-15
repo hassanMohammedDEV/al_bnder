@@ -50,8 +50,6 @@ class _AdminShellState extends ConsumerState<AdminShell> {
           ],
         ),
         body: SafeArea(
-          top: true,
-          bottom: false,
           child: IndexedStack(
             index: _tabIndex,
             children: [

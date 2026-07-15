@@ -50,8 +50,6 @@ class _UserShellState extends ConsumerState<UserShell> {
           ],
         ),
         body: SafeArea(
-          top: true,
-          bottom: false,
           child: IndexedStack(
             index: _tabIndex,
             children: [

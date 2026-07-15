@@ -62,6 +62,7 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
   }
 
   void _reset() {
+    _controller.start();
     setState(() {
       _bookingData = null;
       _errorMsg = null;
@@ -91,9 +92,12 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
             ),
         ],
       ),
-      body: _bookingData != null
-          ? _buildResult(scheme)
-          : _buildCamera(scheme),
+      body: Stack(
+        children: [
+          _buildCamera(scheme),
+          if (_bookingData != null) _buildResult(scheme),
+        ],
+      ),
     );
   }
 
@@ -224,8 +228,10 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
       _ => status,
     };
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return Container(
+      color: scheme.surface,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
       children: [
         Row(
           children: [
@@ -253,9 +259,15 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
         _row('التاريخ', _fmtDate(b['start_at'] as String)),
         _row('الوقت', '$startStr - $endStr'),
         const SizedBox(height: 8),
-        if (paidAmount > 0)
-          _row(paidAmount >= totalPrice ? 'مدفوع بالكامل' : 'عربون',
-            '${paidAmount.toStringAsFixed(0)} ر.ي'),
+        if (b['created_at'] != null) ...[
+          _row('تم الإنشاء', '${_fmtDate(b['created_at'] as String)} - ${_fmtTime(b['created_at'] as String)}'),
+          const SizedBox(height: 8),
+        ],
+        if (paidAmount > 0) ...[
+          _row('المدفوع', '${paidAmount.toStringAsFixed(0)} ر.ي'),
+          if (paidAmount < totalPrice)
+            _row('المتبقي', '${(totalPrice - paidAmount).toStringAsFixed(0)} ر.ي'),
+        ],
         const SizedBox(height: 24),
         FilledButton.icon(
           onPressed: _reset,
@@ -264,7 +276,8 @@ class _ScanQrScreenState extends ConsumerState<ScanQrScreen> {
           style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
         ),
       ],
-    );
+    ),
+  );
   }
 
   Widget _row(String label, String value) {

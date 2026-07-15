@@ -1806,7 +1806,7 @@ BEGIN
       FROM booking_instances bi
       WHERE bi.booking_id = b.id
     )
-  ) ORDER BY b.created_at DESC) INTO v_bookings
+  ) ORDER BY b.created_at ASC) INTO v_bookings
   FROM bookings b
   JOIN facilities f ON f.id = b.facility_id
   JOIN facility_groups fg ON fg.id = f.group_id

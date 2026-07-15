@@ -43,6 +43,12 @@ class BookingMapper extends ClassMapperBase<Booking> {
     _$facilityName,
     key: r'facility_name',
   );
+  static String _$groupId(Booking v) => v.groupId;
+  static const Field<Booking, String> _f$groupId = Field(
+    'groupId',
+    _$groupId,
+    key: r'group_id',
+  );
   static String _$groupName(Booking v) => v.groupName;
   static const Field<Booking, String> _f$groupName = Field(
     'groupName',
@@ -115,6 +121,7 @@ class BookingMapper extends ClassMapperBase<Booking> {
     #userId: _f$userId,
     #facilityId: _f$facilityId,
     #facilityName: _f$facilityName,
+    #groupId: _f$groupId,
     #groupName: _f$groupName,
     #totalPrice: _f$totalPrice,
     #paidAmount: _f$paidAmount,
@@ -133,6 +140,7 @@ class BookingMapper extends ClassMapperBase<Booking> {
       userId: data.dec(_f$userId),
       facilityId: data.dec(_f$facilityId),
       facilityName: data.dec(_f$facilityName),
+      groupId: data.dec(_f$groupId),
       groupName: data.dec(_f$groupName),
       totalPrice: data.dec(_f$totalPrice),
       paidAmount: data.dec(_f$paidAmount),
@@ -216,6 +224,7 @@ abstract class BookingCopyWith<$R, $In extends Booking, $Out>
     String? userId,
     String? facilityId,
     String? facilityName,
+    String? groupId,
     String? groupName,
     double? totalPrice,
     double? paidAmount,
@@ -266,6 +275,7 @@ class _BookingCopyWithImpl<$R, $Out>
     String? userId,
     String? facilityId,
     String? facilityName,
+    String? groupId,
     String? groupName,
     double? totalPrice,
     double? paidAmount,
@@ -282,6 +292,7 @@ class _BookingCopyWithImpl<$R, $Out>
       if (userId != null) #userId: userId,
       if (facilityId != null) #facilityId: facilityId,
       if (facilityName != null) #facilityName: facilityName,
+      if (groupId != null) #groupId: groupId,
       if (groupName != null) #groupName: groupName,
       if (totalPrice != null) #totalPrice: totalPrice,
       if (paidAmount != null) #paidAmount: paidAmount,
@@ -300,6 +311,7 @@ class _BookingCopyWithImpl<$R, $Out>
     userId: data.get(#userId, or: $value.userId),
     facilityId: data.get(#facilityId, or: $value.facilityId),
     facilityName: data.get(#facilityName, or: $value.facilityName),
+    groupId: data.get(#groupId, or: $value.groupId),
     groupName: data.get(#groupName, or: $value.groupName),
     totalPrice: data.get(#totalPrice, or: $value.totalPrice),
     paidAmount: data.get(#paidAmount, or: $value.paidAmount),

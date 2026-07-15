@@ -63,6 +63,14 @@ class AnnouncementMapper extends ClassMapperBase<Announcement> {
     key: r'read_at',
     opt: true,
   );
+  static int _$readCount(Announcement v) => v.readCount;
+  static const Field<Announcement, int> _f$readCount = Field(
+    'readCount',
+    _$readCount,
+    key: r'read_count',
+    opt: true,
+    def: 0,
+  );
 
   @override
   final MappableFields<Announcement> fields = const {
@@ -74,6 +82,7 @@ class AnnouncementMapper extends ClassMapperBase<Announcement> {
     #createdAt: _f$createdAt,
     #isRead: _f$isRead,
     #readAt: _f$readAt,
+    #readCount: _f$readCount,
   };
 
   static Announcement _instantiate(DecodingData data) {
@@ -86,6 +95,7 @@ class AnnouncementMapper extends ClassMapperBase<Announcement> {
       createdAt: data.dec(_f$createdAt),
       isRead: data.dec(_f$isRead),
       readAt: data.dec(_f$readAt),
+      readCount: data.dec(_f$readCount),
     );
   }
 
@@ -160,6 +170,7 @@ abstract class AnnouncementCopyWith<$R, $In extends Announcement, $Out>
     String? createdAt,
     bool? isRead,
     DateTime? readAt,
+    int? readCount,
   });
   AnnouncementCopyWith<$R2, $In, $Out2> $chain<$R2, $Out2>(Then<$Out2, $R2> t);
 }
@@ -182,6 +193,7 @@ class _AnnouncementCopyWithImpl<$R, $Out>
     String? createdAt,
     bool? isRead,
     Object? readAt = $none,
+    int? readCount,
   }) => $apply(
     FieldCopyWithData({
       if (id != null) #id: id,
@@ -192,6 +204,7 @@ class _AnnouncementCopyWithImpl<$R, $Out>
       if (createdAt != null) #createdAt: createdAt,
       if (isRead != null) #isRead: isRead,
       if (readAt != $none) #readAt: readAt,
+      if (readCount != null) #readCount: readCount,
     }),
   );
   @override
@@ -204,6 +217,7 @@ class _AnnouncementCopyWithImpl<$R, $Out>
     createdAt: data.get(#createdAt, or: $value.createdAt),
     isRead: data.get(#isRead, or: $value.isRead),
     readAt: data.get(#readAt, or: $value.readAt),
+    readCount: data.get(#readCount, or: $value.readCount),
   );
 
   @override

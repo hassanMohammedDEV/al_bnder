@@ -154,9 +154,20 @@ class _AnnouncementCard extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 6),
-              Text(
-                announcement.senderName.isNotEmpty ? 'من: ${announcement.senderName}' : '',
-                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant.withValues(alpha: 0.7)),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      announcement.senderName.isNotEmpty ? 'من: ${announcement.senderName}' : '',
+                      style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant.withValues(alpha: 0.7)),
+                    ),
+                  ),
+                  if (isAdmin && announcement.readCount > 0)
+                    Text(
+                      'مقروء من ${announcement.readCount}',
+                      style: TextStyle(fontSize: 11, color: scheme.primary.withValues(alpha: 0.7)),
+                    ),
+                ],
               ),
             ],
           ),

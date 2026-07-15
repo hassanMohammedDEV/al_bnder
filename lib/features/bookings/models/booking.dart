@@ -8,6 +8,7 @@ class Booking with BookingMappable {
   final String userId;
   final String facilityId;
   final String facilityName;
+  final String groupId;
   final String groupName;
   final double totalPrice;
   final double paidAmount;
@@ -24,6 +25,7 @@ class Booking with BookingMappable {
     required this.userId,
     required this.facilityId,
     required this.facilityName,
+    required this.groupId,
     required this.groupName,
     required this.totalPrice,
     this.paidAmount = 0,

@@ -1913,4 +1913,123 @@ $$;
 
 GRANT EXECUTE ON FUNCTION get_admin_dashboard TO authenticated;
 
+-- ============================================================
+-- get_my_announcements مع read_count
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_my_announcements()
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_result JSONB;
+BEGIN
+  v_user_id := auth.uid();
+
+  SELECT jsonb_build_object(
+    'success', true,
+    'data', COALESCE(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', a.id,
+          'sender_id', a.sender_id,
+          'sender_name', COALESCE(p.full_name, ''),
+          'title', a.title,
+          'body', a.body,
+          'created_at', a.created_at,
+          'is_read', ar.announcement_id IS NOT NULL,
+          'read_at', ar.read_at,
+          'read_count', (SELECT COUNT(*) FROM announcement_reads ar2 WHERE ar2.announcement_id = a.id)
+        ) ORDER BY a.created_at DESC
+      ), '[]'::jsonb
+    )
+  ) INTO v_result
+  FROM announcements a
+  LEFT JOIN profiles p ON p.id = a.sender_id
+  LEFT JOIN announcement_reads ar ON ar.announcement_id = a.id AND ar.user_id = v_user_id;
+
+  RETURN v_result;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_my_announcements TO authenticated;
+
+-- ============================================================
+-- admin_get_pending_bookings (الأقدم أولاً)
+-- ============================================================
+CREATE OR REPLACE FUNCTION admin_get_pending_bookings(
+  p_facility_group_id UUID DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id    UUID;
+  v_admin_role  TEXT;
+  v_admin_group UUID;
+  v_bookings    JSONB;
+BEGIN
+  v_admin_id := auth.uid();
+  SELECT role, facility_group_id INTO v_admin_role, v_admin_group
+  FROM profiles WHERE id = v_admin_id;
+
+  IF v_admin_role NOT IN ('facility_admin', 'facility_viewer', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  SELECT jsonb_agg(jsonb_build_object(
+    'id', b.id,
+    'user_id', b.user_id,
+    'guest_name', b.guest_name,
+    'guest_phone', b.guest_phone,
+    'facility_id', b.facility_id,
+    'group_id', fg.id,
+    'facility_name', f.name,
+    'group_name', fg.name,
+    'user_name', COALESCE(p.full_name, b.guest_name),
+    'user_phone', COALESCE(p.phone, b.guest_phone),
+    'total_price', b.total_price,
+    'paid_amount', b.paid_amount,
+    'status', b.status,
+    'payment_status', b.payment_status,
+    'created_at', b.created_at,
+    'instances', (
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', bi.id,
+        'start_at', bi.start_at,
+        'end_at', bi.end_at,
+        'status', bi.status
+      ) ORDER BY bi.start_at)
+      FROM booking_instances bi
+      WHERE bi.booking_id = b.id
+    )
+  ) ORDER BY b.created_at ASC) INTO v_bookings
+  FROM bookings b
+  JOIN facilities f ON f.id = b.facility_id
+  JOIN facility_groups fg ON fg.id = f.group_id
+  LEFT JOIN profiles p ON p.id = b.user_id
+  WHERE b.status IN ('pending', 'pending_approval')
+    AND (p_facility_group_id IS NULL OR fg.id = p_facility_group_id)
+    AND (v_admin_role = 'super_admin' OR fg.id = v_admin_group);
+
+  IF v_bookings IS NULL THEN
+    v_bookings := '[]'::JSONB;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم جلب البيانات بنجاح',
+    'data', jsonb_build_object('bookings', v_bookings)
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_get_pending_bookings TO authenticated;
+
 NOTIFY pgrst, 'reload schema';

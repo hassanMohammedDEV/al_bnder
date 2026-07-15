@@ -104,6 +104,21 @@ class BookingDetailScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
+          // Creation time
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.schedule, size: 16, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: 8),
+                  Text('تم الإنشاء: ${_formatDateTime(booking.createdAt)}',
+                    style: TextStyle(color: scheme.onSurfaceVariant)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
           // Price
           Card(
             child: Padding(
@@ -142,7 +157,7 @@ class BookingDetailScreen extends ConsumerWidget {
                         Text(
                           booking.paidAmount >= booking.totalPrice
                               ? 'مدفوع بالكامل'
-                              : 'مدفوع (عربون): ${booking.paidAmount.toStringAsFixed(0)} ر.ي',
+                              : 'مدفوع: ${booking.paidAmount.toStringAsFixed(0)} ر.ي',
                           style: TextStyle(
                             color: booking.paidAmount >= booking.totalPrice ? Colors.green : scheme.primary,
                             fontWeight: FontWeight.w500,
@@ -150,6 +165,17 @@ class BookingDetailScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    if (booking.paidAmount < booking.totalPrice) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(Icons.money_off, size: 16, color: scheme.error),
+                          const SizedBox(width: 8),
+                          Text('المتبقي: ${(booking.totalPrice - booking.paidAmount).toStringAsFixed(0)} ر.ي',
+                            style: TextStyle(color: scheme.error, fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -271,6 +297,15 @@ class _StatusBadge extends StatelessWidget {
       child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
     );
   }
+}
+
+String _formatDateTime(String iso) {
+  final dt = DateTime.parse(iso).toLocal();
+  final h = dt.hour;
+  final m = dt.minute;
+  final hour12 = h == 0 ? 12 : (h <= 12 ? h : h - 12);
+  final period = h < 12 ? 'ص' : 'م';
+  return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')} $hour12:${m.toString().padLeft(2, '0')} $period';
 }
 
 String _cancelMessage(Booking booking) {

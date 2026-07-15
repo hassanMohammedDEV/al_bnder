@@ -38,8 +38,6 @@ class _ViewerShellState extends ConsumerState<ViewerShell> {
           title: const Text('البندر | تجريبي'),
         ),
         body: SafeArea(
-          top: true,
-          bottom: false,
           child: IndexedStack(
             index: _tabIndex,
             children: [

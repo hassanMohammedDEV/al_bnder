@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../presentaion/shared/time_picker_dialog.dart';
 import '../../repositories/admin_repository_impl.dart';
+import '../../providers/admin_provider.dart';
 import '../../../../core/helpers/error_helper.dart';
 
 class AdminTodayBookingsScreen extends ConsumerStatefulWidget {
@@ -207,7 +208,7 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
                     child: FilledButton.icon(
                       icon: const Icon(Icons.check_circle_outline, size: 18),
                       label: const Text('تأكيد الحجز'),
-                      onPressed: () => _confirmBooking(context, id),
+                      onPressed: () => _confirmBooking(context, id, (b['total_price'] as num?)?.toDouble() ?? 0),
                     ),
                   )
                 else if (status == 'confirmed')
@@ -515,38 +516,118 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
     );
   }
 
-  Future<void> _confirmBooking(BuildContext context, String bookingId) async {
-    final amountCtrl = TextEditingController();
-    final confirmed = await showDialog<bool>(
+  Future<void> _confirmBooking(BuildContext context, String bookingId, double totalPrice) async {
+    final paidAmount = await showDialog<double>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تأكيد الحجز'),
-        content: TextField(
-          controller: amountCtrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'المبلغ المدفوع (اختياري)',
-            hintText: '0',
-            border: OutlineInputBorder(),
+      builder: (ctx) {
+        String? option;
+        final depositCtl = TextEditingController();
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: const Text('تأكيد الحجز'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('هل تم استلام الدفع؟', style: TextStyle(fontSize: 15)),
+                const SizedBox(height: 12),
+                RadioGroup<String?>(
+                  groupValue: option,
+                  onChanged: (v) => setDialogState(() { option = v; depositCtl.clear(); }),
+                  child: InkWell(
+                    onTap: () => setDialogState(() { option = 'none'; depositCtl.clear(); }),
+                    child: Row(
+                      children: [
+                        Radio<String?>(value: 'none'),
+                        const Text('لم يتم الدفع', style: TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                ),
+                RadioGroup<String?>(
+                  groupValue: option,
+                  onChanged: (v) => setDialogState(() => option = v),
+                  child: InkWell(
+                    onTap: () => setDialogState(() => option = 'deposit'),
+                    child: Row(
+                      children: [
+                        Radio<String?>(value: 'deposit'),
+                        const Text('عربون', style: TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                ),
+                if (option == 'deposit')
+                  Padding(
+                    padding: const EdgeInsets.only(left: 40, bottom: 8),
+                    child: TextField(
+                      controller: depositCtl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'المبلغ',
+                        suffixText: 'ر.ي',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                RadioGroup<String?>(
+                  groupValue: option,
+                  onChanged: (v) => setDialogState(() { option = v; depositCtl.clear(); }),
+                  child: InkWell(
+                    onTap: () => setDialogState(() { option = 'full'; depositCtl.clear(); }),
+                    child: Row(
+                      children: [
+                        Radio<String?>(value: 'full'),
+                        Text('المبلغ كامل (${totalPrice.toStringAsFixed(0)} ر.ي)', style: const TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('تراجع')),
+              FilledButton(
+                onPressed: () {
+                  if (option == 'none') {
+                    Navigator.pop(ctx, 0);
+                  } else if (option == 'full') {
+                    Navigator.pop(ctx, totalPrice);
+                  } else if (option == 'deposit') {
+                    final v = double.tryParse(depositCtl.text);
+                    if (v != null && v > 0) Navigator.pop(ctx, v);
+                  }
+                },
+                child: const Text('تأكيد'),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد')),
-        ],
-      ),
+        );
+      },
     );
-    if (confirmed != true) return;
-    if (!mounted) return;
-    final paid = double.tryParse(amountCtrl.text) ?? 0;
-    final result = await ref.read(adminRepositoryProvider).confirmBooking(bookingId, paidAmount: paid);
+    if (paidAmount == null) return;
+
+    final result = await ref.read(adminActionProvider.notifier).confirmBooking(bookingId, paidAmount: paidAmount);
     if (!mounted) return;
     result.when(
       success: (_) {
         _load();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تأكيد الحجز')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              paidAmount > 0
+                  ? 'تم تأكيد الحجز (المدفوع: ${paidAmount.toStringAsFixed(0)} ر.ي)'
+                  : 'تم تأكيد الحجز (لم يتم الدفع)',
+            ),
+          ),
+        );
       },
-      failure: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(translateError(e)))),
+      failure: (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(translateError(e))),
+        );
+      },
     );
   }
 
