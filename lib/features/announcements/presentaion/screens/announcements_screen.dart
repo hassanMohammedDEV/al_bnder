@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../models/announcement.dart';
 import '../../providers/announcement_provider.dart';
+import '../../providers/local_notification_provider.dart';
 
 String _formatDate(String iso) {
   final dt = DateTime.parse(iso);
@@ -26,13 +27,17 @@ class AnnouncementsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final state = ref.watch(announcementsProvider);
+    final localNotifications = ref.watch(localNotificationsProvider);
     final auth = ref.watch(authStateProvider);
     final isAdmin = auth.role == 'facility_admin' || auth.role == 'super_admin';
 
+    final serverEmpty = state.data == null || state.data!.isEmpty;
+    final showLocal = localNotifications.isNotEmpty;
+
     Widget content;
-    if (state.status == LoadStatus.loading) {
+    if (state.status == LoadStatus.loading && serverEmpty) {
       content = const Center(child: CircularProgressIndicator());
-    } else if (state.status == LoadStatus.error) {
+    } else if (state.status == LoadStatus.error && serverEmpty && !showLocal) {
       content = Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -43,7 +48,7 @@ class AnnouncementsScreen extends ConsumerWidget {
           ],
         ),
       );
-    } else if (state.data == null || state.data!.isEmpty) {
+    } else if (serverEmpty && !showLocal) {
       content = Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -56,10 +61,44 @@ class AnnouncementsScreen extends ConsumerWidget {
       );
     } else {
       final bottomInset = MediaQuery.of(context).padding.bottom;
+      final serverCount = state.data?.length ?? 0;
+      final dividerCount = (serverCount > 0 && showLocal) ? 2 : 0;
+      final totalCount = serverCount + (showLocal ? localNotifications.length + dividerCount : 0);
+
       content = ListView.builder(
         padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
-        itemCount: state.data!.length,
-        itemBuilder: (_, i) => _AnnouncementCard(announcement: state.data![i]),
+        itemCount: totalCount,
+        itemBuilder: (_, i) {
+          if (i < serverCount) {
+            return _AnnouncementCard(announcement: state.data![i]);
+          }
+          final localIndex = i - serverCount;
+          if (dividerCount > 0 && localIndex == 0) {
+            return Column(
+              children: [
+                const Divider(height: 32),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      Icon(Icons.notifications_outlined, size: 16, color: scheme.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Text(
+                        'إشعارات التطبيق',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                _LocalNotificationCard(notification: localNotifications[0]),
+              ],
+            );
+          }
+          if (dividerCount > 0) {
+            return _LocalNotificationCard(notification: localNotifications[localIndex - 1]);
+          }
+          return _LocalNotificationCard(notification: localNotifications[localIndex]);
+        },
       );
     }
 
@@ -73,6 +112,72 @@ class AnnouncementsScreen extends ConsumerWidget {
               child: const Icon(Icons.add),
             )
           : null,
+    );
+  }
+}
+
+class _LocalNotificationCard extends ConsumerWidget {
+  final LocalNotification notification;
+  const _LocalNotificationCard({required this.notification});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Dismissible(
+      key: ValueKey(notification.id),
+      direction: DismissDirection.endToStart,
+      onDismissed: (_) => ref.read(localNotificationsProvider.notifier).remove(notification.id),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        decoration: BoxDecoration(
+          color: scheme.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(Icons.delete_outline, color: scheme.onErrorContainer),
+      ),
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        color: scheme.secondaryContainer.withValues(alpha: 0.25),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 8, height: 8,
+                    margin: const EdgeInsets.only(left: 8),
+                    decoration: BoxDecoration(
+                      color: scheme.secondary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Icon(notification.type == 'welcome' ? Icons.waving_hand_outlined : Icons.check_circle_outline, size: 18, color: scheme.secondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      notification.title,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Text(
+                    _formatDate(notification.createdAt.toIso8601String()),
+                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                notification.body,
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

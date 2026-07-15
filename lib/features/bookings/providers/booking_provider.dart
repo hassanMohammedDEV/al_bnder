@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import '../models/booking.dart';
 import '../models/booking_state.dart';
 import '../repositories/booking_repository_impl.dart';
+import '../../announcements/providers/local_notification_provider.dart';
 import '../../wallet/providers/wallet_provider.dart';
 import '../../facilities/providers/selected_group_provider.dart';
 
@@ -164,6 +165,15 @@ class BookingActionNotifier extends StateNotifier<ActionStore> {
       success: (_) {
         state = state.success(key);
         ref.read(myBookingsProvider.notifier).load();
+        ref.read(localNotificationsProvider.notifier).add(
+          LocalNotification(
+            id: 'booking_${DateTime.now().millisecondsSinceEpoch}',
+            type: 'booking',
+            title: '✅ تم إنشاء حجزك في ${form.facilityName}',
+            body: 'تم إنشاء حجزك بنجاح. تابع حالة الحجز من صفحة حجوزاتي. نتمنى لك وقتاً ممتعاً! ⚽',
+            createdAt: DateTime.now(),
+          ),
+        );
       },
       failure: (e) => state = state.fail(key, e),
     );

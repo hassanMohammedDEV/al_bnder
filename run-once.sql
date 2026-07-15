@@ -266,11 +266,16 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_admin_id    UUID;
-  v_admin_role  TEXT;
-  v_admin_group UUID;
-  v_booking     bookings%ROWTYPE;
-  v_facility    facilities%ROWTYPE;
+  v_admin_id       UUID;
+  v_admin_role     TEXT;
+  v_admin_group    UUID;
+  v_booking        bookings%ROWTYPE;
+  v_facility       facilities%ROWTYPE;
+  v_user_phone     TEXT;
+  v_facility_name  TEXT;
+  v_group_name     TEXT;
+  v_instances_text TEXT;
+  v_sms_token      TEXT := 'f553Lv0dTZGY3qwFRAdUan:APA91bHdlPb8gXlxRvEXY-pQWOhfnsheKK7qdMmD1Nnb6LV9Yhl8VbixYserGbOgRBn3AA9rnooVfP-BNi4TEVD8ssAWiQHQTyHX4J4iN7fpJT7UKucCxQA';
 BEGIN
   v_admin_id := auth.uid();
   SELECT role, facility_group_id INTO v_admin_role, v_admin_group
@@ -303,6 +308,41 @@ BEGIN
   WHERE id = p_booking_id;
 
   UPDATE booking_instances SET status = 'confirmed' WHERE booking_id = p_booking_id;
+
+  -- Send SMS confirmation to user
+  BEGIN
+    SELECT phone INTO v_user_phone FROM profiles WHERE id = v_booking.user_id;
+    SELECT f.name, fg.name INTO v_facility_name, v_group_name
+    FROM facilities f JOIN facility_groups fg ON fg.id = f.group_id WHERE f.id = v_booking.facility_id;
+
+    SELECT string_agg(
+      to_char((bi.start_at AT TIME ZONE 'Asia/Riyadh'), 'DD/MM/YYYY HH24:MI') || ' - ' ||
+      to_char((bi.end_at AT TIME ZONE 'Asia/Riyadh'), 'HH24:MI'),
+      E'\n'
+    ) INTO v_instances_text
+    FROM booking_instances bi WHERE bi.booking_id = p_booking_id;
+
+    IF v_user_phone IS NOT NULL THEN
+      PERFORM net.http_post(
+        url := 'https://www.traccar.org/sms/',
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', v_sms_token
+        ),
+        body := jsonb_build_object(
+          'to', v_user_phone,
+          'message', 'تم تأكيد حجزك في ' || v_facility_name || ' 🏟️' || E'\n' ||
+                     v_group_name || E'\n' ||
+                     E'\n' ||
+                     v_instances_text || E'\n' ||
+                     E'\n' ||
+                     'جاهز يا بطل! 💪'
+        )
+      );
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
 
   RETURN jsonb_build_object(
     'success', true,

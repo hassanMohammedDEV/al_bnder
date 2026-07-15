@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../../../core/helpers/error_helper.dart';
+import '../../../announcements/providers/local_notification_provider.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
   const OtpScreen({super.key});
@@ -103,6 +104,15 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
           regResult.when(
             success: (auth) {
               ref.read(authStateProvider.notifier).setLoggedIn(auth);
+              ref.read(localNotificationsProvider.notifier).add(
+                LocalNotification(
+                  id: 'welcome',
+                  type: 'welcome',
+                  title: '🎉 أهلاً بك يابطل في ملاعب البندر!',
+                  body: 'نحن سعداء بانضمامك إلينا! استعد لعيش تجارب رياضية لا تُنسى مع أفضل الملاعب. سجل حجزك الآن وابدأ رحلتك ⚽',
+                  createdAt: DateTime.now(),
+                ),
+              );
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   _loading = false;

@@ -54,6 +54,17 @@
 - Admin dashboard still shows settlement card for super_admin (legacy, super_admin no longer uses it)
 - `dashboardProvider` (FutureProvider) and `adminActionProvider` from admin feature are used by both admin and super_admin
 
+## Relevant paths (cont.)
+- `lib/features/announcements/providers/local_notification_provider.dart` — LocalNotification model + SharedPreferences-backed provider
+- `lib/features/announcements/presentaion/screens/announcements_screen.dart` — merged server + local notifications display with divider
+
+## Local notifications
+- `LocalNotification` model + `localNotificationsProvider` (Riverpod NotifierProvider) backed by SharedPreferences
+- Welcome notification added on OTP registration success (`otp_screen.dart`)
+- Booking-created notification added on `BookingActionNotifier.createBooking` success (`booking_provider.dart`)
+- Displayed in `announcements_screen.dart` below server announcements with a visual divider and "إشعارات التطبيق" header
+- Swipe-to-dismiss (`Dismissible`) to remove local notifications
+
 ## In Progress
 _none_
 
