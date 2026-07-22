@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../reports/presentaion/screens/reports_screen.dart';
+import 'daily_report_screen.dart';
 import 'simple_settings_screen.dart';
 
 class ViewerShell extends ConsumerStatefulWidget {
@@ -41,8 +42,9 @@ class _ViewerShellState extends ConsumerState<ViewerShell> {
           child: IndexedStack(
             index: _tabIndex,
             children: [
-              const ReportsScreen(inShell: true),
-              _tab(1, const SimpleSettingsScreen()),
+              const DailyReportScreen(inShell: true),
+              _tab(1, const ReportsScreen(inShell: true)),
+              _tab(2, const SimpleSettingsScreen()),
             ],
           ),
         ),
@@ -50,6 +52,7 @@ class _ViewerShellState extends ConsumerState<ViewerShell> {
           selectedIndex: _tabIndex,
           onDestinationSelected: _selectTab,
           destinations: const [
+            NavigationDestination(icon: Icon(Icons.today_outlined), selectedIcon: Icon(Icons.today), label: 'اليومية'),
             NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'التقارير'),
             NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'المزيد'),
           ],

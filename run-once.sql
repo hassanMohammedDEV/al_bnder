@@ -1957,6 +1957,73 @@ $$;
 GRANT EXECUTE ON FUNCTION admin_get_today_scheduled_bookings TO authenticated;
 
 -- ============================================================
+-- 25b. admin_get_today_bookings (حجوزات منشأة اليوم)
+-- ============================================================
+CREATE OR REPLACE FUNCTION admin_get_today_bookings(
+  p_facility_group_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id    UUID;
+  v_admin_role  TEXT;
+  v_admin_group UUID;
+  v_bookings    JSONB;
+BEGIN
+  v_admin_id := auth.uid();
+  SELECT role, facility_group_id INTO v_admin_role, v_admin_group
+  FROM profiles WHERE id = v_admin_id;
+
+  IF v_admin_role NOT IN ('facility_admin', 'facility_viewer', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  SELECT jsonb_agg(jsonb_build_object(
+    'id', b.id,
+    'user_id', b.user_id,
+    'guest_name', b.guest_name,
+    'guest_phone', b.guest_phone,
+    'facility_id', b.facility_id,
+    'facility_name', f.name,
+    'user_name', COALESCE(p.full_name, b.guest_name),
+    'user_phone', COALESCE(p.phone, b.guest_phone),
+    'total_price', b.total_price,
+    'paid_amount', b.paid_amount,
+    'status', b.status,
+    'created_at', b.created_at,
+    'instances', (
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', bi.id,
+        'start_at', bi.start_at,
+        'end_at', bi.end_at,
+        'status', bi.status
+      ) ORDER BY bi.start_at)
+      FROM booking_instances bi
+      WHERE bi.booking_id = b.id
+    )
+  ) ORDER BY b.created_at DESC) INTO v_bookings
+  FROM bookings b
+  JOIN facilities f ON f.id = b.facility_id
+  LEFT JOIN profiles p ON p.id = b.user_id
+  WHERE f.group_id = p_facility_group_id
+    AND b.created_at >= CURRENT_DATE
+    AND (v_admin_role = 'super_admin' OR f.group_id = v_admin_group);
+
+  IF v_bookings IS NULL THEN
+    v_bookings := '[]'::JSONB;
+  END IF;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم جلب البيانات', 'data', v_bookings);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_get_today_bookings TO authenticated;
+
+-- ============================================================
 -- 26. تحديث get_admin_dashboard مع فلترة تاريخ (p_from_date, p_to_date)
 -- ============================================================
 DROP FUNCTION IF EXISTS get_admin_dashboard(UUID);

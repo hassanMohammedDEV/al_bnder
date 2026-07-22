@@ -197,6 +197,7 @@ class _LocalNotificationCard extends ConsumerWidget {
   void _showDetail(BuildContext context, LocalNotification n) {
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => Padding(
         padding: const EdgeInsets.all(24),
@@ -351,6 +352,7 @@ class _AnnouncementCard extends ConsumerWidget {
   void _showDetail(BuildContext context, Announcement a, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => Padding(
         padding: const EdgeInsets.all(24),

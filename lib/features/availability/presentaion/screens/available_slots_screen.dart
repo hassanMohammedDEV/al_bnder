@@ -175,7 +175,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
     final selectedId = ref.watch(selectedGroupProvider);
 
     Widget content = ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
       children: [
         // Group chips
         if (groups.isNotEmpty) ...[
