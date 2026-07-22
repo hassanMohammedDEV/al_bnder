@@ -61,44 +61,41 @@ class AnnouncementsScreen extends ConsumerWidget {
       );
     } else {
       final bottomInset = MediaQuery.of(context).padding.bottom;
-      final serverCount = state.data?.length ?? 0;
-      final dividerCount = (serverCount > 0 && showLocal) ? 2 : 0;
-      final totalCount = serverCount + (showLocal ? localNotifications.length + dividerCount : 0);
 
-      content = ListView.builder(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
-        itemCount: totalCount,
-        itemBuilder: (_, i) {
-          if (i < serverCount) {
-            return _AnnouncementCard(announcement: state.data![i]);
-          }
-          final localIndex = i - serverCount;
-          if (dividerCount > 0 && localIndex == 0) {
-            return Column(
+      final items = <Widget>[];
+
+      if (showLocal) {
+        items.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
               children: [
-                const Divider(height: 32),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    children: [
-                      Icon(Icons.notifications_outlined, size: 16, color: scheme.onSurfaceVariant),
-                      const SizedBox(width: 6),
-                      Text(
-                        'إشعارات التطبيق',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
+                Icon(Icons.notifications_outlined, size: 16, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Text(
+                  'إشعارات التطبيق',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: scheme.onSurfaceVariant),
                 ),
-                _LocalNotificationCard(notification: localNotifications[0]),
               ],
-            );
-          }
-          if (dividerCount > 0) {
-            return _LocalNotificationCard(notification: localNotifications[localIndex - 1]);
-          }
-          return _LocalNotificationCard(notification: localNotifications[localIndex]);
-        },
+            ),
+          ),
+        );
+        items.addAll(localNotifications.map((n) => _LocalNotificationCard(notification: n)));
+      }
+
+      if (serverEmpty && showLocal) {
+        // only local — skip divider
+      } else if (showLocal && !serverEmpty) {
+        items.add(const Divider(height: 32));
+      }
+
+      if (state.data != null) {
+        items.addAll(state.data!.map((a) => _AnnouncementCard(announcement: a)));
+      }
+
+      content = ListView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
+        children: items,
       );
     }
 
@@ -123,6 +120,7 @@ class _LocalNotificationCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+    final isUnread = !notification.isRead;
 
     return Dismissible(
       key: ValueKey(notification.id),
@@ -139,43 +137,91 @@ class _LocalNotificationCard extends ConsumerWidget {
       ),
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
-        color: scheme.secondaryContainer.withValues(alpha: 0.25),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 8, height: 8,
-                    margin: const EdgeInsets.only(left: 8),
-                    decoration: BoxDecoration(
-                      color: scheme.secondary,
-                      shape: BoxShape.circle,
+        color: isUnread
+            ? scheme.secondaryContainer.withValues(alpha: 0.25)
+            : null,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            ref.read(localNotificationsProvider.notifier).markAsRead(notification.id);
+            _showDetail(context, notification);
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (isUnread)
+                      Container(
+                        width: 8, height: 8,
+                        margin: const EdgeInsets.only(left: 8),
+                        decoration: BoxDecoration(
+                          color: scheme.secondary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    Icon(notification.type == 'welcome' ? Icons.waving_hand_outlined : Icons.check_circle_outline, size: 18, color: scheme.secondary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        notification.title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: isUnread ? FontWeight.w600 : FontWeight.w500,
+                        ),
+                      ),
                     ),
-                  ),
-                  Icon(notification.type == 'welcome' ? Icons.waving_hand_outlined : Icons.check_circle_outline, size: 18, color: scheme.secondary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      notification.title,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    Text(
+                      _formatDate(notification.createdAt.toIso8601String()),
+                      style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                     ),
-                  ),
-                  Text(
-                    _formatDate(notification.createdAt.toIso8601String()),
-                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                notification.body,
-                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
-              ),
-            ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  notification.body,
+                  style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showDetail(BuildContext context, LocalNotification n) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(n.type == 'welcome' ? Icons.waving_hand_outlined : Icons.check_circle_outline, color: Theme.of(context).colorScheme.secondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(n.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _formatDate(n.createdAt.toIso8601String()),
+              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            const Divider(height: 24),
+            Text(n.body, style: const TextStyle(fontSize: 15, height: 1.5)),
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );

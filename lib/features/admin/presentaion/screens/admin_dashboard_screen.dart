@@ -117,7 +117,18 @@ class AdminDashboardScreen extends ConsumerWidget {
                   onTap: () => context.push('/available-slots'),
                 ),
               ),
-              Expanded(child: const SizedBox()),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _QuickAction(
+                  icon: Icons.event,
+                  label: 'حجوزات موعدها اليوم',
+                  color: Colors.indigo,
+                  onTap: () {
+                    final gid = ref.read(selectedGroupProvider);
+                    if (gid != null) context.push('/admin/bookings-scheduled-today', extra: gid);
+                  },
+                ),
+              ),
               Expanded(child: const SizedBox()),
             ],
           ),
@@ -286,7 +297,7 @@ class _StatsSection extends StatelessWidget {
         const SizedBox(height: 12),
         // Today's stats (most important)
         _StatCard(
-          title: 'حجوزات اليوم',
+          title: 'حجوزات منشأة اليوم',
           value: '${totals.todayConfirmed} مؤكدة / ${totals.todayPending} معلقة / ${totals.todayPendingApproval} شبه مؤكدة',
           icon: Icons.today,
           color: Colors.blue,

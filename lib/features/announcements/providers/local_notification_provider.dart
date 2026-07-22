@@ -9,6 +9,7 @@ class LocalNotification {
   final String title;
   final String body;
   final DateTime createdAt;
+  final bool isRead;
 
   const LocalNotification({
     required this.id,
@@ -16,7 +17,17 @@ class LocalNotification {
     required this.title,
     required this.body,
     required this.createdAt,
+    this.isRead = false,
   });
+
+  LocalNotification copyWith({bool? isRead}) => LocalNotification(
+    id: id,
+    type: type,
+    title: title,
+    body: body,
+    createdAt: createdAt,
+    isRead: isRead ?? this.isRead,
+  );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -24,6 +35,7 @@ class LocalNotification {
     'title': title,
     'body': body,
     'created_at': createdAt.toIso8601String(),
+    'isRead': isRead,
   };
 
   factory LocalNotification.fromJson(Map<String, dynamic> json) => LocalNotification(
@@ -32,6 +44,7 @@ class LocalNotification {
     title: json['title'] as String,
     body: json['body'] as String,
     createdAt: DateTime.parse(json['created_at'] as String),
+    isRead: json['isRead'] as bool? ?? false,
   );
 }
 
@@ -63,16 +76,29 @@ class LocalNotificationsNotifier extends Notifier<List<LocalNotification>> {
 
   Future<void> add(LocalNotification notification) async {
     state = [notification, ...state];
-    await _save();
+    try {
+      await _save();
+    } catch (_) {}
   }
 
   Future<void> remove(String id) async {
     state = state.where((e) => e.id != id).toList();
-    await _save();
+    try {
+      await _save();
+    } catch (_) {}
+  }
+
+  Future<void> markAsRead(String id) async {
+    state = state.map((e) => e.id == id ? e.copyWith(isRead: true) : e).toList();
+    try {
+      await _save();
+    } catch (_) {}
   }
 
   Future<void> clear() async {
     state = [];
-    await _save();
+    try {
+      await _save();
+    } catch (_) {}
   }
 }

@@ -60,11 +60,17 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     super.dispose();
   }
 
-  void _goBackToRegister() {
-    ref.read(authStateProvider.notifier).clearPendingPhone();
-    ref.read(pendingRegistrationProvider.notifier).state = null;
-    ref.read(authStateProvider.notifier).logout();
-    context.go('/register');
+  void _goBackToLogin() {
+    final pending = ref.read(pendingRegistrationProvider);
+    if (pending != null) {
+      ref.read(authStateProvider.notifier).clearPendingPhone();
+      ref.read(pendingRegistrationProvider.notifier).state = null;
+      ref.read(authStateProvider.notifier).logout();
+      context.go('/register');
+    } else {
+      ref.read(authStateProvider.notifier).logout();
+      context.go('/login');
+    }
   }
 
   Future<void> _sendOtp() async {
@@ -166,7 +172,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
         title: const Text('تأكيد رقم الجوال'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: _goBackToRegister,
+          onPressed: _goBackToLogin,
         ),
       ),
       body: SafeArea(
@@ -224,7 +230,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                 ),
               const Spacer(),
               TextButton.icon(
-                onPressed: _goBackToRegister,
+                onPressed: _goBackToLogin,
                 icon: const Icon(Icons.edit, size: 16),
                 label: const Text('رقم خطأ؟ سجل برقم جديد'),
                 style: TextButton.styleFrom(

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../auth/providers/auth_provider.dart';
+import '../../../../core/providers/app_version_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class SimpleSettingsScreen extends ConsumerWidget {
@@ -118,7 +119,10 @@ class SimpleSettingsScreen extends ConsumerWidget {
               ListTile(
                 leading: Icon(Icons.info_outline, color: scheme.primary),
                 title: const Text('الإصدار'),
-                trailing: Text('1.0.40', style: TextStyle(color: scheme.onSurfaceVariant)),
+                trailing: ref.watch(appVersionProvider).maybeWhen(
+                  data: (v) => Text(v, style: TextStyle(color: scheme.onSurfaceVariant)),
+                  orElse: () => Text('1.0.0', style: TextStyle(color: scheme.onSurfaceVariant)),
+                ),
               ),
             ],
           ),

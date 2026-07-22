@@ -10,6 +10,7 @@ import '../../features/auth/presentaion/screens/forgot_password_otp_screen.dart'
 import '../../features/auth/presentaion/screens/edit_profile_screen.dart';
 import '../../features/auth/presentaion/screens/otp_screen.dart';
 import '../../features/auth/providers/auth_provider.dart';
+
 import '../../features/facilities/models/facility.dart';
 import '../../features/facilities/presentaion/screens/home_screen.dart';
 import '../../features/facilities/presentaion/screens/facilities_screen.dart';
@@ -46,24 +47,55 @@ import '../../features/player_ads/presentaion/screens/reported_ads_screen.dart';
 import '../../features/player_ads/presentaion/screens/banned_users_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final router = GoRouter(
-    initialLocation: '/login',
-    redirect: (context, state) {
-      final auth = ref.read(authStateProvider);
-      final isLoggedIn = auth.isLoggedIn;
-      final location = state.matchedLocation;
-      final isAuthRoute = location == '/login' || location == '/register' || location == '/verify-otp' || location == '/forgot-password' || location == '/forgot-password-otp' || location == '/privacy' || location == '/terms';
+    final router = GoRouter(
+      initialLocation: '/splash',
+      redirect: (context, state) {
+        final auth = ref.read(authStateProvider);
+        final location = state.matchedLocation;
 
-      if (isLoggedIn) {
-        if (auth.needsPhoneVerification && location != '/verify-otp') return '/verify-otp';
-        if (isAuthRoute) return '/home';
-      }
-      if (!isLoggedIn && auth.pendingPhone != null && location != '/verify-otp') return '/verify-otp';
-      if (!isLoggedIn && !isAuthRoute && location != '/register') return '/login';
-      return null;
-    },
-    routes: [
-      GoRoute(path: '/login', pageBuilder: (_, _) => const CupertinoPage(child: LoginScreen())),
+        if (auth.isLoading) return location == '/splash' ? null : '/splash';
+        if (location == '/splash') {
+          if (auth.isLoggedIn) {
+            if (auth.needsPhoneVerification) return '/verify-otp';
+            return '/home';
+          }
+          return '/login';
+        }
+
+        final isLoggedIn = auth.isLoggedIn;
+        final isAuthRoute = location == '/login' || location == '/register' || location == '/verify-otp' || location == '/forgot-password' || location == '/forgot-password-otp' || location == '/privacy' || location == '/terms';
+
+        if (isLoggedIn) {
+          if (auth.needsPhoneVerification && location != '/verify-otp') return '/verify-otp';
+          if (isAuthRoute && !auth.needsPhoneVerification) return '/home';
+        }
+        if (!isLoggedIn && auth.pendingPhone != null && location != '/verify-otp') return '/verify-otp';
+        if (!isLoggedIn && !isAuthRoute && location != '/register') return '/login';
+        return null;
+      },
+      routes: [
+        GoRoute(
+          path: '/splash',
+          pageBuilder: (_, _) => CupertinoPage(
+            child: Scaffold(
+              backgroundColor: const Color(0xFF1B5E20),
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('البندر', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: 32, height: 32,
+                      child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white.withValues(alpha: 0.8)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        GoRoute(path: '/login', pageBuilder: (_, _) => const CupertinoPage(child: LoginScreen())),
       GoRoute(path: '/register', pageBuilder: (_, _) => const CupertinoPage(child: RegisterScreen())),
       GoRoute(
         path: '/verify-otp',
@@ -157,14 +189,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/admin/settings',
         pageBuilder: (_, _) => const CupertinoPage(child: GroupSettingsScreen()),
       ),
-      GoRoute(
-        path: '/admin/today-bookings',
-        pageBuilder: (_, state) => CupertinoPage(
-          child: AdminTodayBookingsScreen(
-            facilityGroupId: state.extra as String,
-          ),
+      GoRoute(path: '/admin/today-bookings', pageBuilder: (_, state) => CupertinoPage(
+        child: AdminTodayBookingsScreen(
+          facilityGroupId: state.extra as String,
+          mode: 'created',
         ),
-      ),
+      )),
+      GoRoute(path: '/admin/bookings-scheduled-today', pageBuilder: (_, state) => CupertinoPage(
+        child: AdminTodayBookingsScreen(
+          facilityGroupId: state.extra as String,
+          mode: 'scheduled',
+        ),
+      )),
       GoRoute(
         path: '/admin/user-wallet',
         pageBuilder: (_, state) {

@@ -32,6 +32,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     final auth = ref.read(authStateProvider);
+
+    bool phoneExists = false;
+    final phoneCheck = await ref.read(authServiceProvider).checkPhone(auth.phone);
+    if (!mounted) return;
+    phoneCheck.when(success: (exists) => phoneExists = exists, failure: (_) {});
+    if (phoneExists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('المستخدم موجود مسبقاً')),
+      );
+      return;
+    }
+
     final result = await ref.read(authActionProvider.notifier).startRegistration(
       auth.phone,
       auth.password,

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../facilities/providers/facility_provider.dart';
 import '../../../facilities/providers/selected_group_provider.dart';
+import '../../../../core/providers/app_version_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 
 class AdminSettingsScreen extends ConsumerWidget {
@@ -158,7 +159,10 @@ class AdminSettingsScreen extends ConsumerWidget {
               ListTile(
                 leading: Icon(Icons.info_outline, color: scheme.primary),
                 title: const Text('الإصدار'),
-                trailing: Text('1.0.40', style: TextStyle(color: scheme.onSurfaceVariant)),
+                trailing: ref.watch(appVersionProvider).maybeWhen(
+                  data: (v) => Text(v, style: TextStyle(color: scheme.onSurfaceVariant)),
+                  orElse: () => Text('1.0.0', style: TextStyle(color: scheme.onSurfaceVariant)),
+                ),
               ),
               const Divider(height: 1),
               if (managerPhone != null && managerPhone.isNotEmpty)

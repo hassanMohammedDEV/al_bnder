@@ -177,6 +177,16 @@ class AdminRepositoryImpl implements AdminRepository {
   }
 
   @override
+  Future<Result<List<Map<String, dynamic>>>> getScheduledTodayBookings(String facilityGroupId) {
+    return _apiClient.post('rpc/admin_get_today_scheduled_bookings', body: {
+      'p_facility_group_id': facilityGroupId,
+    }, parser: (json) {
+      final data = (json as Map<String, dynamic>)['data'] as List;
+      return data.cast<Map<String, dynamic>>();
+    });
+  }
+
+  @override
   Future<Result<Map<String, dynamic>>> getGroupSettings(String facilityGroupId) {
     return _apiClient.post('rpc/get_group_settings', body: {
       'p_facility_group_id': facilityGroupId,

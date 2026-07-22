@@ -1,5 +1,6 @@
 String get _baseSupabaseUrl => const String.fromEnvironment(
   'SUPABASE_URL',
+  // defaultValue: 'https://al-bndr-proxy-5.vercel.app/api',
   defaultValue: 'https://xlcmbxvqdfwlfotyvqas.supabase.co',
 );
 String get supabaseUrl => '$_baseSupabaseUrl/';

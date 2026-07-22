@@ -48,6 +48,11 @@ class AnnouncementRepositoryImpl implements AnnouncementRepository {
   }
 
   @override
+  Future<Result<void>> markAllAnnouncementsRead() {
+    return _apiClient.post('rpc/mark_all_announcements_read', body: {}, parser: (_) {});
+  }
+
+  @override
   Future<Result<void>> deleteAnnouncement(String id) {
     return _apiClient.post('rpc/delete_announcement', body: {
       'p_announcement_id': id,

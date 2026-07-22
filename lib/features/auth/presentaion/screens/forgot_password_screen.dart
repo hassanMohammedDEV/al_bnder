@@ -36,9 +36,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     setState(() => _loading = true);
     final existsResult = await ref.read(authServiceProvider).checkPhone(phone);
     if (!mounted) { _loading = false; return; }
-    final exists = existsResult is Success<bool> && existsResult.data;
-    if (!exists) {
-      setState(() => _loading = false);
+    setState(() => _loading = false);
+    if (existsResult is! Success<bool>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(translateError((existsResult as Failure).error))),
+      );
+      return;
+    }
+    if (!existsResult.data) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('رقم الجوال غير مسجل')),
       );

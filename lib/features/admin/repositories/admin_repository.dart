@@ -40,6 +40,7 @@ abstract class AdminRepository {
   });
   Future<Result<Map<String, dynamic>>> getGroupSettings(String facilityGroupId);
   Future<Result<List<Map<String, dynamic>>>> getTodayBookings(String facilityGroupId);
+  Future<Result<List<Map<String, dynamic>>>> getScheduledTodayBookings(String facilityGroupId);
   Future<Result<Map<String, dynamic>>> getBookingByQrToken(String qrToken);
   Future<Result<Map<String, dynamic>>> getUserWallet({
     required String targetUserId,

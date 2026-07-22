@@ -426,8 +426,8 @@ BEGIN
     FROM facilities f JOIN facility_groups fg ON fg.id = f.group_id WHERE f.id = v_booking.facility_id;
 
     SELECT string_agg(
-      to_char((bi.start_at AT TIME ZONE 'Asia/Riyadh'), 'DD/MM/YYYY HH24:MI') || ' - ' ||
-      to_char((bi.end_at AT TIME ZONE 'Asia/Riyadh'), 'HH24:MI'),
+      to_char((bi.start_at AT TIME ZONE 'Asia/Riyadh'), 'DD/MM/YYYY HH12:MI AM') || ' - ' ||
+      to_char((bi.end_at AT TIME ZONE 'Asia/Riyadh'), 'HH12:MI AM'),
       E'\n'
     ) INTO v_instances_text
     FROM booking_instances bi WHERE bi.booking_id = p_booking_id;

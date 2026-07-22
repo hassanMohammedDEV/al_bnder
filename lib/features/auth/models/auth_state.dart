@@ -10,6 +10,7 @@ class AuthState {
   final String? role;
   final String? facilityGroupId;
   final String? pendingPhone;
+  final bool isLoading;
 
   const AuthState({
     this.name = '',
@@ -23,6 +24,7 @@ class AuthState {
     this.role,
     this.facilityGroupId,
     this.pendingPhone,
+    this.isLoading = false,
   });
 
   AuthState copyWith({
@@ -37,6 +39,7 @@ class AuthState {
     String? role,
     String? facilityGroupId,
     String? pendingPhone,
+    bool? isLoading,
     bool clearPendingPhone = false,
   }) {
     return AuthState(
@@ -51,6 +54,7 @@ class AuthState {
       role: role ?? this.role,
       facilityGroupId: facilityGroupId ?? this.facilityGroupId,
       pendingPhone: clearPendingPhone ? null : (pendingPhone ?? this.pendingPhone),
+      isLoading: isLoading ?? this.isLoading,
     );
   }
 

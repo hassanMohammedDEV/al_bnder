@@ -14,6 +14,15 @@
 - Run `flutter analyze` to check for warnings/errors
 - No new files unless explicitly requested; prefer editing existing code
 
+## CRITICAL: Auth state sequence (DO NOT CHANGE)
+- `updateProfile()` must NEVER set `needsPhoneVerification` — that flag is controlled solely by `setPhoneVerified()` / `setNeedsPhoneVerification()` during an active verification flow. DB `phone_verified` may be stale (proxy/RPC fails), so `updateProfile` reads it for `phoneVerified` field but MUST NOT derive `needsPhoneVerification` from it.
+- **Registration**: `setPhoneVerifiedDb()` → `_fetchProfile()` → `setPhoneVerified(true)` ← `setPhoneVerified(true)` must be LAST to override anything `_fetchProfile` wrote from DB.
+- **Login**: `setLoggedIn()` → `_fetchProfile()` → `setPhoneVerified(true)` ← same reason.
+- **On boot**: always fetch profile if `isLoggedIn` (no `!isProfileLoaded` guard). Safe try-catch around `getProfile()` — if it throws (timeout/network), clear session silently.
+- **No splash screen / `isInitializing`** — was removed. Caused stuck white screen with loading. App just renders the correct screen after auth check; brief redirect flicker is acceptable. DO NOT reintroduce.
+- **OTP back button**: if `pendingRegistrationProvider` is non-null → `/register`, else → `/login`.
+- `setPhoneVerifiedDb()` (RPC) may fail silently through proxy — local `setPhoneVerified(true)` ensures the user isn't stuck in verification loop.
+
 ## Architecture
 - State: Riverpod (NotifierProvider, BaseState/ActionStore, FutureProvider)
 - Network: ApiClient.post('rpc/...', body: {...}, parser: ...) with Result<T>
@@ -70,12 +79,15 @@ _none_
 
 ## Done
 
-### OTP fresh-install redirect loop
-- Remove `needsPhoneVerification` from persisted session (`_saveSession` in auth_provider.dart)
-- In `main.dart`, always set `needsPhoneVerification: false` on initial load
-- In `AuthNotifier.build()`, if initial auth exists with `isLoggedIn=true` and `isProfileLoaded=false`, schedule a `Future.microtask` to call `getProfile()`
-- In `updateProfile()`, if `phone_verified` is false, auto-set `needsPhoneVerification=true`
-- On fresh install with stale Keychain data: profile fetch fails → `profileLoadFailed()` → no OTP redirect → login screen
+### Blank screen on reinstall (stale Keychain)
+- Root cause: `AuthNotifier.build()` only re-fetched profile when `!initial.isProfileLoaded`, but Keychain persists `isProfileLoaded=true` across uninstall on iOS
+- Fix: removed `!initial.isProfileLoaded` condition — always call `getProfile()` if `isLoggedIn`, regardless of `isProfileLoaded`
+- If profile fetch fails (deleted user / expired token / stale session), `_clearSession()` runs and auth resets to empty → login screen renders properly
+- On success, `updateProfile` always runs (removed `!initial.isProfileLoaded` guard) to ensure fresh data from server
+- Also: removed `needsPhoneVerification` from `_saveSession` so it's never persisted
+- In `main.dart`, always set `needsPhoneVerification: false` on initial load (ignore stale session value)
+- In `updateProfile()`, must NOT set `needsPhoneVerification` (see CRITICAL section above)
+- Splash screen experiment (`isInitializing`) was removed — caused stuck white screen. DO NOT reintroduce.
 
 ### logoutAndClear() + deleteAccount()
 - Added `logoutAndClear()` — async variant of `logout()` that `await`s `_clearSession()`
@@ -97,5 +109,4 @@ _none_
 
 ## Next Steps
 - Run `run-once.sql` in Supabase SQL Editor to deploy settlement tables/RPCs
-- Monitor for any regressions in OTP flow on fresh install vs. upgrade scenarios
 - Test delete-account flow end-to-end to confirm session clears properly after account deletion

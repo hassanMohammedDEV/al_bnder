@@ -7,11 +7,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-import '../../../core/providers/initial_state_provider.dart';
 import '../../../core/providers/token_provider.dart';
 import '../../../features/facilities/providers/facility_provider.dart';
+import '../../../features/facilities/providers/selected_group_provider.dart';
 import '../../../features/wallet/providers/wallet_provider.dart';
 import '../../../features/admin/providers/admin_provider.dart';
+import '../../../features/announcements/repositories/announcement_repository_impl.dart';
+import '../../../features/announcements/providers/announcement_provider.dart';
+import '../../../features/announcements/providers/local_notification_provider.dart';
+import '../../../features/bookings/providers/booking_provider.dart';
+import '../../../features/player_ads/providers/player_ad_provider.dart';
+import '../../../features/ads/providers/ads_provider.dart';
 import '../models/auth_state.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/auth_repository_impl.dart';
@@ -32,29 +38,63 @@ final pendingRegistrationProvider = StateProvider<PendingRegistration?>((ref) =>
 class AuthNotifier extends Notifier<AuthState> {
   @override
   AuthState build() {
-    final initial = ref.read(initialAuthProvider);
-    if (initial != null) {
-      if (initial.phone.isNotEmpty) {
-        Future.microtask(() {
-          const secure = FlutterSecureStorage();
-          secure.write(key: 'remembered_phone', value: initial.phone);
-        });
-      }
-      if (initial.isLoggedIn && !initial.isProfileLoaded) {
-        Future.microtask(() async {
-          final result = await ref.read(authServiceProvider).getProfile();
-          result.when(
-            success: (profile) => updateProfile(profile),
-            failure: (_) {
-              state = const AuthState();
-              _clearSession();
-            },
+    Future.microtask(() async {
+      try {
+        const secure = FlutterSecureStorage();
+        final savedSession = await secure
+            .read(key: 'auth_session')
+            .timeout(const Duration(seconds: 10));
+        final savedToken = await secure
+            .read(key: 'auth_token')
+            .timeout(const Duration(seconds: 10));
+        if (savedSession != null) {
+          final map = jsonDecode(savedSession) as Map<String, dynamic>;
+          final initial = AuthState(
+            name: map['name'] as String? ?? '',
+            phone: map['phone'] as String? ?? '',
+            isLoggedIn: map['isLoggedIn'] as bool? ?? false,
+            isProfileLoaded: map['isProfileLoaded'] as bool? ?? false,
+            phoneVerified: map['phoneVerified'] as bool? ?? false,
+            needsPhoneVerification: false,
+            userId: map['userId'] as String?,
+            role: map['role'] as String?,
+            facilityGroupId: map['facility_group_id'] as String?,
+            pendingPhone: map['pendingPhone'] as String?,
           );
-        });
+
+          if (savedToken != null && savedToken.isNotEmpty) {
+            ref.read(tokenManagerProvider).setLoadedToken(savedToken);
+          }
+
+          if (initial.phone.isNotEmpty) {
+            await secure.write(key: 'remembered_phone', value: initial.phone);
+          }
+
+          state = initial.copyWith(isLoading: false);
+
+          if (initial.isLoggedIn) {
+            final result = await ref.read(authServiceProvider).getProfile();
+            result.when(
+              success: (profile) {
+                updateProfile(profile);
+              },
+              failure: (_) {
+                state = const AuthState();
+                _clearSession();
+              },
+            );
+          }
+        } else {
+          state = const AuthState();
+        }
+      } on TimeoutException {
+        state = const AuthState();
+      } catch (_) {
+        state = const AuthState();
+        _clearSession();
       }
-      return initial;
-    }
-    return const AuthState();
+    });
+    return const AuthState(isLoading: true);
   }
 
   void updateName(String value) => state = state.copyWith(name: value);
@@ -70,16 +110,26 @@ class AuthNotifier extends Notifier<AuthState> {
     ref.invalidate(facilityGroupsProvider);
     ref.invalidate(facilitiesProvider);
     ref.invalidate(walletInfoFamilyProvider);
+    ref.invalidate(walletInfoProvider);
     ref.invalidate(dashboardProvider);
     ref.invalidate(pendingBookingsProvider);
+    ref.invalidate(myBookingsProvider);
+    ref.invalidate(selectedGroupProvider);
+    ref.invalidate(announcementsProvider);
+    ref.invalidate(unreadCountProvider);
+    ref.invalidate(playerAdsProvider);
+    ref.invalidate(reportedPlayerAdsProvider);
+    ref.invalidate(adsProvider);
+    ref.invalidate(bookingFormProvider);
   }
 
   void updateProfile(Map<String, dynamic> profile) {
+    final verified = profile['phone_verified'] as bool? ?? state.phoneVerified;
     state = state.copyWith(
       name: profile['full_name'] as String? ?? state.name,
       role: profile['role'] as String?,
       facilityGroupId: profile['facility_group_id'] as String?,
-      phoneVerified: profile['phone_verified'] as bool? ?? state.phoneVerified,
+      phoneVerified: verified,
       isProfileLoaded: true,
     );
     _saveSession(state);
@@ -112,21 +162,45 @@ class AuthNotifier extends Notifier<AuthState> {
   void logout() {
     state = const AuthState();
     _clearSession();
+    ref.read(localNotificationsProvider.notifier).clear();
+    unawaited(ref.read(sharedPreferencesProvider).remove('selected_group_id'));
     ref.invalidate(facilityGroupsProvider);
     ref.invalidate(facilitiesProvider);
     ref.invalidate(walletInfoFamilyProvider);
+    ref.invalidate(walletInfoProvider);
     ref.invalidate(dashboardProvider);
     ref.invalidate(pendingBookingsProvider);
+    ref.invalidate(myBookingsProvider);
+    ref.invalidate(selectedGroupProvider);
+    ref.invalidate(announcementsProvider);
+    ref.invalidate(unreadCountProvider);
+    ref.invalidate(playerAdsProvider);
+    ref.invalidate(reportedPlayerAdsProvider);
+    ref.invalidate(adsProvider);
+    ref.invalidate(bookingFormProvider);
+    ref.invalidate(localNotificationsProvider);
   }
 
   Future<void> logoutAndClear() async {
     await _clearSession();
+    await ref.read(localNotificationsProvider.notifier).clear();
+    await ref.read(sharedPreferencesProvider).remove('selected_group_id');
     state = const AuthState();
     ref.invalidate(facilityGroupsProvider);
     ref.invalidate(facilitiesProvider);
     ref.invalidate(walletInfoFamilyProvider);
+    ref.invalidate(walletInfoProvider);
     ref.invalidate(dashboardProvider);
     ref.invalidate(pendingBookingsProvider);
+    ref.invalidate(myBookingsProvider);
+    ref.invalidate(selectedGroupProvider);
+    ref.invalidate(announcementsProvider);
+    ref.invalidate(unreadCountProvider);
+    ref.invalidate(playerAdsProvider);
+    ref.invalidate(reportedPlayerAdsProvider);
+    ref.invalidate(adsProvider);
+    ref.invalidate(bookingFormProvider);
+    ref.invalidate(localNotificationsProvider);
   }
 
   Future<void> _saveSession(AuthState auth) async {
@@ -137,7 +211,6 @@ class AuthNotifier extends Notifier<AuthState> {
       'isLoggedIn': auth.isLoggedIn,
       'isProfileLoaded': auth.isProfileLoaded,
       'phoneVerified': auth.phoneVerified,
-      'needsPhoneVerification': auth.needsPhoneVerification,
       'userId': auth.userId,
       'role': auth.role,
       'facilityGroupId': auth.facilityGroupId,
@@ -214,6 +287,7 @@ class AuthActionNotifier extends StateNotifier<ActionStore> {
     if (result is Success<AuthState>) {
       ref.read(authStateProvider.notifier).setLoggedIn(result.data);
       await _fetchProfile();
+      ref.read(authStateProvider.notifier).setPhoneVerified(true);
       state = state.success(key);
       AuthRepositoryImpl.saveBiometricCredentials(phone, password);
     } else if (result is Failure<AuthState>) {
@@ -246,11 +320,12 @@ class AuthActionNotifier extends StateNotifier<ActionStore> {
         pending.phone, pending.password, name: pending.name,
       );
       if (result is Success<AuthState>) {
-        await _fetchProfile();
         await ref.read(authServiceProvider).setPhoneVerifiedDb();
+        await _fetchProfile();
+        await ref.read(announcementRepositoryProvider).markAllAnnouncementsRead();
+        ref.read(authStateProvider.notifier).setPhoneVerified(true);
         ref.read(pendingRegistrationProvider.notifier).state = null;
         ref.read(authStateProvider.notifier).clearPendingPhone();
-        ref.read(authStateProvider.notifier).setPhoneVerified(true);
         state = state.success(key);
         return result;
       } else if (result is Failure<AuthState>) {

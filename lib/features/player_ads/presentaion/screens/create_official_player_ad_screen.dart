@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../providers/player_ad_provider.dart';
+import '../../../admin/repositories/admin_repository_impl.dart';
 import '../../../facilities/providers/facility_provider.dart';
 import '../../../facilities/providers/selected_group_provider.dart';
 import '../../../../presentaion/shared/time_picker_dialog.dart';
@@ -121,6 +122,42 @@ class _CreateOfficialPlayerAdScreenState extends ConsumerState<CreateOfficialPla
     }
 
     setState(() => _isSubmitting = true);
+
+    if (_startTime != null && _endTime != null) {
+      final startMin = _startTime!.hour * 60 + _startTime!.minute;
+      final endMin = _endTime!.hour * 60 + _endTime!.minute;
+      final durationHours = (endMin - startMin) / 60.0;
+
+      if (durationHours <= 0) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('وقت النهاية يجب أن يكون بعد وقت البداية')),
+        );
+        return;
+      }
+
+      double maxHours = 3.0;
+      try {
+        final result = await ref.read(adminRepositoryProvider).getGroupSettings(groupId);
+        result.when(
+          success: (data) {
+            maxHours = (data['max_booking_hours'] as num?)?.toDouble() ?? 3.0;
+          },
+          failure: (_) {},
+        );
+      } catch (_) {}
+
+      if (!mounted) return;
+      if (durationHours > maxHours) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('المدة لا تتجاوز ${maxHours.toInt()} ساعات')),
+        );
+        return;
+      }
+    }
+
+    if (!mounted) return;
 
     final dayNames = ['', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
     final day = dayNames[_pickedDate!.weekday];

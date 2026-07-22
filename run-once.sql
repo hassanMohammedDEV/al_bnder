@@ -316,8 +316,8 @@ BEGIN
     FROM facilities f JOIN facility_groups fg ON fg.id = f.group_id WHERE f.id = v_booking.facility_id;
 
     SELECT string_agg(
-      to_char((bi.start_at AT TIME ZONE 'Asia/Riyadh'), 'DD/MM/YYYY HH24:MI') || ' - ' ||
-      to_char((bi.end_at AT TIME ZONE 'Asia/Riyadh'), 'HH24:MI'),
+      to_char((bi.start_at AT TIME ZONE 'Asia/Riyadh'), 'DD/MM/YYYY HH12:MI AM') || ' - ' ||
+      to_char((bi.end_at AT TIME ZONE 'Asia/Riyadh'), 'HH12:MI AM'),
       E'\n'
     ) INTO v_instances_text
     FROM booking_instances bi WHERE bi.booking_id = p_booking_id;
@@ -621,7 +621,7 @@ SET search_path = public, net
 AS $$
 DECLARE
   v_token   TEXT := '8746929485:AAFHOmVFVDBrmmHE8WUcJ7xffzRZGz7NLSo';
-  v_chat_id TEXT := '8756453222';
+  v_chat_id TEXT := '8673737891';
   v_body    JSONB;
   v_text    TEXT;
   v_booking bookings%ROWTYPE;
@@ -1783,7 +1783,181 @@ $$;
 GRANT EXECUTE ON FUNCTION get_my_wallet TO authenticated;
 
 -- ============================================================
--- 25. تحديث get_admin_dashboard مع فلترة تاريخ (p_from_date, p_to_date)
+-- 25a. إيداع في محفظة المستخدم (مع إرسال SMS)
+-- ============================================================
+-- POST /rest/v1/rpc/admin_deposit_wallet
+-- Body: {
+--   "target_user_id": "uuid",
+--   "facility_group_id": "uuid",
+--   "amount": 100.00,
+--   "description": "تم الشحن عبر واتساب"
+-- }
+CREATE OR REPLACE FUNCTION admin_deposit_wallet(
+  p_target_user_id    UUID,
+  p_facility_group_id UUID,
+  p_amount            DECIMAL(10,2),
+  p_description       TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id       UUID;
+  v_admin_role     TEXT;
+  v_admin_group    UUID;
+  v_wallet_id      UUID;
+  v_new_balance    DECIMAL(10,2);
+  v_user_phone     TEXT;
+  v_sms_token      TEXT := 'f553Lv0dTZGY3qwFRAdUan:APA91bHdlPb8gXlxRvEXY-pQWOhfnsheKK7qdMmD1Nnb6LV9Yhl8VbixYserGbOgRBn3AA9rnooVfP-BNi4TEVD8ssAWiQHQTyHX4J4iN7fpJT7UKucCxQA';
+BEGIN
+  v_admin_id := auth.uid();
+  SELECT role, facility_group_id INTO v_admin_role, v_admin_group
+  FROM profiles WHERE id = v_admin_id;
+
+  IF v_admin_role NOT IN ('facility_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  IF v_admin_role = 'facility_admin' AND p_facility_group_id != v_admin_group THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح: هذه المجموعة ليست من صلاحياتك', 'data', null);
+  END IF;
+
+  IF p_amount <= 0 THEN
+    RETURN jsonb_build_object('success', false, 'message', 'المبلغ يجب أن يكون أكبر من صفر', 'data', null);
+  END IF;
+
+  SELECT phone INTO v_user_phone FROM profiles WHERE id = p_target_user_id;
+
+  INSERT INTO wallets (user_id, facility_group_id, balance)
+  VALUES (p_target_user_id, p_facility_group_id, 0)
+  ON CONFLICT (user_id, facility_group_id) DO NOTHING;
+
+  UPDATE profiles SET facility_group_id = COALESCE(facility_group_id, p_facility_group_id)
+  WHERE id = p_target_user_id;
+
+  SELECT id, balance INTO v_wallet_id, v_new_balance
+  FROM wallets
+  WHERE user_id = p_target_user_id AND facility_group_id = p_facility_group_id
+  FOR UPDATE;
+
+  UPDATE wallets SET balance = balance + p_amount WHERE id = v_wallet_id
+  RETURNING balance INTO v_new_balance;
+
+  INSERT INTO wallet_transactions (wallet_id, amount, type, reference_type, description, created_by)
+  VALUES (v_wallet_id, p_amount, 'deposit', 'admin_deposit',
+          COALESCE(p_description, 'شحن رصيد بواسطة المشرف'), v_admin_id);
+
+  IF v_user_phone IS NOT NULL THEN
+    PERFORM net.http_post(
+      url     := 'https://www.traccar.org/sms/',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', v_sms_token
+      ),
+      body := jsonb_build_object(
+        'to',      v_user_phone,
+        'message', 'تم شحن رصيدك في ملاعب البندر بمبلغ ' || p_amount::TEXT || ' ريال. رصيدك الحالي: ' || v_new_balance::TEXT || ' ريال'
+      )
+    );
+  END IF;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', 'تم شحن المحفظة بنجاح',
+    'data', jsonb_build_object(
+      'wallet_id', v_wallet_id,
+      'amount_added', p_amount,
+      'new_balance', v_new_balance
+    )
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_deposit_wallet TO authenticated;
+
+-- ============================================================
+-- 25b. حجوزات موعدها اليوم
+-- ============================================================
+CREATE OR REPLACE FUNCTION admin_get_today_scheduled_bookings(
+  p_facility_group_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_admin_id    UUID;
+  v_admin_role  TEXT;
+  v_admin_group UUID;
+  v_bookings    JSONB;
+  v_today_start TIMESTAMPTZ;
+  v_today_end   TIMESTAMPTZ;
+BEGIN
+  v_admin_id := auth.uid();
+  SELECT role, facility_group_id INTO v_admin_role, v_admin_group
+  FROM profiles WHERE id = v_admin_id;
+
+  IF v_admin_role NOT IN ('facility_admin', 'facility_viewer', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'message', 'غير مصرح', 'data', null);
+  END IF;
+
+  v_today_start := (CURRENT_DATE AT TIME ZONE 'Asia/Riyadh')::TIMESTAMPTZ;
+  v_today_end := v_today_start + INTERVAL '1 day';
+
+  SELECT jsonb_agg(jsonb_build_object(
+    'id', b.id,
+    'user_id', b.user_id,
+    'guest_name', b.guest_name,
+    'guest_phone', b.guest_phone,
+    'facility_id', b.facility_id,
+    'facility_name', f.name,
+    'user_name', COALESCE(p.full_name, b.guest_name),
+    'user_phone', COALESCE(p.phone, b.guest_phone),
+    'total_price', b.total_price,
+    'paid_amount', b.paid_amount,
+    'status', b.status,
+    'created_at', b.created_at,
+    'instances', (
+      SELECT jsonb_agg(jsonb_build_object(
+        'id', bi.id,
+        'start_at', bi.start_at,
+        'end_at', bi.end_at,
+        'status', bi.status
+      ) ORDER BY bi.start_at)
+      FROM booking_instances bi
+      WHERE bi.booking_id = b.id
+        AND bi.start_at >= v_today_start
+        AND bi.start_at < v_today_end
+    )
+  ) ORDER BY (SELECT MIN(bi2.start_at) FROM booking_instances bi2 WHERE bi2.booking_id = b.id AND bi2.start_at >= v_today_start AND bi2.start_at < v_today_end)) INTO v_bookings
+  FROM bookings b
+  JOIN facilities f ON f.id = b.facility_id
+  LEFT JOIN profiles p ON p.id = b.user_id
+  WHERE f.group_id = p_facility_group_id
+    AND EXISTS (
+      SELECT 1 FROM booking_instances bi
+      WHERE bi.booking_id = b.id
+        AND bi.start_at >= v_today_start
+        AND bi.start_at < v_today_end
+    )
+    AND (v_admin_role = 'super_admin' OR f.group_id = v_admin_group);
+
+  IF v_bookings IS NULL THEN
+    v_bookings := '[]'::JSONB;
+  END IF;
+
+  RETURN jsonb_build_object('success', true, 'message', 'تم جلب البيانات', 'data', v_bookings);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION admin_get_today_scheduled_bookings TO authenticated;
+
+-- ============================================================
+-- 26. تحديث get_admin_dashboard مع فلترة تاريخ (p_from_date, p_to_date)
 -- ============================================================
 DROP FUNCTION IF EXISTS get_admin_dashboard(UUID);
 DROP FUNCTION IF EXISTS get_admin_dashboard(UUID, DATE, DATE);
@@ -2071,5 +2245,24 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION admin_get_pending_bookings TO authenticated;
+
+-- ============================================================
+-- mark_all_announcements_read (للمستخدمين الجدد)
+-- ============================================================
+CREATE OR REPLACE FUNCTION mark_all_announcements_read()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO announcement_reads (announcement_id, user_id, read_at)
+  SELECT id, auth.uid(), now() FROM announcements
+  ON CONFLICT (announcement_id, user_id) DO NOTHING;
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION mark_all_announcements_read TO authenticated;
 
 NOTIFY pgrst, 'reload schema';

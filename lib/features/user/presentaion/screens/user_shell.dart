@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../announcements/providers/announcement_provider.dart';
+import '../../../announcements/providers/local_notification_provider.dart';
 import '../../../bookings/presentaion/screens/my_bookings_screen.dart';
 import '../../../facilities/presentaion/screens/home_tab.dart';
 import '../../../wallet/presentaion/screens/wallet_screen.dart';
@@ -46,7 +47,10 @@ class _UserShellState extends ConsumerState<UserShell> {
               tooltip: 'الأوقات المتاحة',
               onPressed: () => context.push('/available-slots'),
             ),
-            _bellBadge(),
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: _bellBadge(),
+            ),
           ],
         ),
         body: SafeArea(
@@ -75,7 +79,9 @@ class _UserShellState extends ConsumerState<UserShell> {
   }
 
   Widget _bellBadge() {
-    final count = ref.watch(unreadCountProvider);
+    final serverCount = ref.watch(unreadCountProvider);
+    final localCount = ref.watch(localNotificationsProvider).where((e) => !e.isRead).length;
+    final total = serverCount + localCount;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -83,7 +89,7 @@ class _UserShellState extends ConsumerState<UserShell> {
           icon: const Icon(Icons.notifications_outlined),
           onPressed: () => context.push('/announcements'),
         ),
-        if (count > 0)
+        if (total > 0)
           Positioned(
             left: 4, top: 4,
             child: Container(
@@ -94,7 +100,7 @@ class _UserShellState extends ConsumerState<UserShell> {
               ),
               constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
               child: Text(
-                count > 9 ? '9+' : '$count',
+                total > 9 ? '9+' : '$total',
                 style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),

@@ -9,7 +9,12 @@ import '../../../../core/helpers/error_helper.dart';
 
 class AdminTodayBookingsScreen extends ConsumerStatefulWidget {
   final String facilityGroupId;
-  const AdminTodayBookingsScreen({super.key, required this.facilityGroupId});
+  final String mode; // 'created' or 'scheduled'
+  const AdminTodayBookingsScreen({
+    super.key,
+    required this.facilityGroupId,
+    this.mode = 'created',
+  });
 
   @override
   ConsumerState<AdminTodayBookingsScreen> createState() => _AdminTodayBookingsScreenState();
@@ -37,7 +42,10 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
   }
 
   Future<void> _load() async {
-    final result = await ref.read(adminRepositoryProvider).getTodayBookings(widget.facilityGroupId);
+    final repo = ref.read(adminRepositoryProvider);
+    final result = widget.mode == 'scheduled'
+        ? await repo.getScheduledTodayBookings(widget.facilityGroupId)
+        : await repo.getTodayBookings(widget.facilityGroupId);
     if (!mounted) return;
     result.when(
       success: (data) => setState(() { _all = data; _filtered = data; }),
@@ -69,7 +77,7 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('حجوزات اليوم'),
+        title: Text(widget.mode == 'scheduled' ? 'حجوزات موعدها اليوم' : 'حجوزات منشأة اليوم'),
         actions: [
           IconButton(
             icon: Icon(_showSearch ? Icons.close : Icons.search),
