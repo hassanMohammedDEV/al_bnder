@@ -43,10 +43,11 @@ class SettlementScreen extends ConsumerWidget {
       return stats != null && stats.developerDue > 0;
     }).toList();
 
+    final bottomPad = MediaQuery.of(context).padding.bottom;
     return RefreshIndicator(
       onRefresh: () async => ref.invalidate(dashboardProvider),
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad + 16),
         children: [
           if (unsettled.isNotEmpty) ...[
             Row(

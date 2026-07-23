@@ -331,8 +331,9 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   }
 
   String _to12h(int minutesSinceMidnight) {
-    final h = minutesSinceMidnight ~/ 60;
-    final m = (minutesSinceMidnight % 60).toString().padLeft(2, '0');
+    final totalMinutes = minutesSinceMidnight % (24 * 60);
+    final h = totalMinutes ~/ 60;
+    final m = (totalMinutes % 60).toString().padLeft(2, '0');
     final period = h >= 12 ? 'م' : 'ص';
     final hour12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
     return '$hour12:$m $period';
@@ -386,13 +387,23 @@ class _FacilitySlotsCard extends StatelessWidget {
             const SizedBox(height: 12),
             if (facility.bookedSlots.isEmpty)
               _TimeBar(label: 'الملعب متاح طوال اليوم', color: Colors.green, scheme: scheme)
-            else
+            else ...[
               for (final b in facility.bookedSlots)
                 _TimeBar(
-                  label: '${_formatSlotTime(b.startAt)} - ${_formatSlotTime(b.endAt)} (${_statusLabel(b.status)})',
-                  color: Colors.red.shade300,
+                  label: '${_formatSlotTime(b.startAt)} - ${_formatSlotTime(b.endAt)} ${_statusLabel(b.status)}',
+                  icon: _statusIcon(b.status),
+                  color: _statusColor(b.status),
                   scheme: scheme,
                 ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                children: [
+                  _LegendItem(color: Colors.red.shade300, label: 'مؤكد'),
+                  _LegendItem(color: Colors.orange.shade400, label: 'معلق'),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -410,11 +421,50 @@ class _FacilitySlotsCard extends StatelessWidget {
 
   String _statusLabel(String status) {
     switch (status) {
-      case 'confirmed': return 'مؤكد';
-      case 'pending': return 'معلق';
-      case 'pending_approval': return 'شبه مؤكد';
+      case 'confirmed': return '( مؤكد )';
+      case 'pending': return '( معلق — في انتظار الموافقة )';
+      case 'pending_approval': return '( شبه مؤكد )';
       default: return status;
     }
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'confirmed': return Icons.check_circle;
+      case 'pending': return Icons.hourglass_top;
+      case 'pending_approval': return Icons.pending;
+      default: return Icons.help_outline;
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'confirmed': return Colors.red.shade300;
+      case 'pending': return Colors.orange.shade400;
+      case 'pending_approval': return Colors.amber.shade600;
+      default: return Colors.grey;
+    }
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _LegendItem({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8, height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      ],
+    );
   }
 }
 
@@ -422,8 +472,9 @@ class _TimeBar extends StatelessWidget {
   final String label;
   final Color color;
   final ColorScheme scheme;
+  final IconData? icon;
 
-  const _TimeBar({required this.label, required this.color, required this.scheme});
+  const _TimeBar({required this.label, required this.color, required this.scheme, this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -435,6 +486,10 @@ class _TimeBar extends StatelessWidget {
             width: 8, height: 8, margin: const EdgeInsets.only(left: 8),
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+          ],
           Expanded(child: Text(label, style: TextStyle(fontSize: 13, color: scheme.onSurface))),
         ],
       ),

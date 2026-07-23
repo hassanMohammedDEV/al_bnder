@@ -223,7 +223,7 @@ class _BookingPaginatedListState extends State<_BookingPaginatedList> {
       child: ListView.builder(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16).copyWith(bottom: MediaQuery.of(context).padding.bottom + 16),
         itemCount: itemCount,
         itemBuilder: (_, i) {
           if (i == bookings.length) {

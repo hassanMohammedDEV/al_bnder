@@ -296,7 +296,7 @@ class _WalletPaginatedListState extends State<_WalletPaginatedList> {
       child: ListView.builder(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 24),
         itemCount: itemCount,
         itemBuilder: (_, i) {
           if (i < headerCount) {

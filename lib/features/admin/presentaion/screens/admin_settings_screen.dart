@@ -24,8 +24,9 @@ class AdminSettingsScreen extends ConsumerWidget {
     final selectedGroup = groups.where((g) => g.id == selectedGroupId).firstOrNull;
     final managerPhone = selectedGroup?.phone;
 
+    final bottomPad = MediaQuery.of(context).padding.bottom;
     final content = ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad + 16),
       children: [
         // Profile section
         Card(

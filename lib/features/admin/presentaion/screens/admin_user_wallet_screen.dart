@@ -67,7 +67,7 @@ class _AdminUserWalletScreenState extends ConsumerState<AdminUserWalletScreen> {
     final transactions = (_data!['transactions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
     return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
       children: [
         // Balance card
         Container(

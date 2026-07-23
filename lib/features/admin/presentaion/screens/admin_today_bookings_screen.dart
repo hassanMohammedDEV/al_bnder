@@ -154,7 +154,7 @@ class _AdminTodayBookingsScreenState extends ConsumerState<AdminTodayBookingsScr
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.fromLTRB(12, 12, 12, MediaQuery.of(context).padding.bottom + 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

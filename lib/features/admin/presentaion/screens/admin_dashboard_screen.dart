@@ -20,10 +20,11 @@ class AdminDashboardScreen extends ConsumerWidget {
     final isSuperAdmin = auth.role == 'super_admin';
     final period = ref.watch(dashboardPeriodProvider);
 
+    final bottomPad = MediaQuery.of(context).padding.bottom;
     final body = RefreshIndicator(
       onRefresh: () async => ref.invalidate(dashboardProvider),
       child: ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad + 16),
       children: [
         // Period filter
         _PeriodFilter(period: period),

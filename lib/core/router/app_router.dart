@@ -175,7 +175,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/admin/scan-qr',
-        pageBuilder: (_, _) => const CupertinoPage(child: ScanQrScreen()),
+        pageBuilder: (_, _) => const MaterialPage(child: ScanQrScreen()),
       ),
       GoRoute(
         path: '/admin/search-bookings',

@@ -44,7 +44,7 @@ class ManageFacilitiesScreen extends ConsumerWidget {
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(adminFacilitiesProvider(groupId)),
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
               itemCount: facilities.length,
               itemBuilder: (_, i) => _FacilityCard(facility: facilities[i]),
             ),

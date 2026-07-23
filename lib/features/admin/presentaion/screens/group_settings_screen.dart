@@ -230,7 +230,7 @@ class _GroupSettingsScreenState extends ConsumerState<GroupSettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('إعدادات المجموعة')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
         children: [
           if (isSuperAdmin) ...[
             DropdownButtonFormField<String>(

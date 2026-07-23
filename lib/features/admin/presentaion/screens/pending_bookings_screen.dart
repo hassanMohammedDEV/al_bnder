@@ -269,7 +269,7 @@ class _PendingBookingsScreenState extends ConsumerState<PendingBookingsScreen> {
         ),
         onSuccess: (_) => ListView.builder(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16).copyWith(bottom: MediaQuery.of(context).padding.bottom + 16),
           itemCount: bookings.length,
           itemBuilder: (_, i) => _buildBookingCard(bookings[i], scheme, action),
         ),

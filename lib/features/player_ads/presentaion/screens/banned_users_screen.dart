@@ -172,7 +172,7 @@ class _BannedUsersScreenState extends ConsumerState<BannedUsersScreen> {
             ),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
                 itemCount: _searchResults.length,
                 itemBuilder: (_, i) {
                   final u = _searchResults[i];
@@ -239,7 +239,7 @@ class _BannedUsersScreenState extends ConsumerState<BannedUsersScreen> {
                 child: RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 16),
                     itemCount: _banned.length,
                     itemBuilder: (_, i) {
                       final b = _banned[i];

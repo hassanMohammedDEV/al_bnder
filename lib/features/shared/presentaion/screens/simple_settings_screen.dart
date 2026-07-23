@@ -16,8 +16,9 @@ class SimpleSettingsScreen extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final auth = ref.watch(authStateProvider);
 
+    final bottomPad = MediaQuery.of(context).padding.bottom;
     final content = ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPad + 16),
       children: [
         Card(
           child: Column(

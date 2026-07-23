@@ -235,7 +235,7 @@ class _AdminSearchBookingsScreenState extends ConsumerState<AdminSearchBookingsS
               child: RefreshIndicator(
                 onRefresh: _search,
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(context).padding.bottom + 16),
                   itemCount: _results.length,
                   itemBuilder: (_, i) => _buildCard(_results[i], scheme),
                 ),
